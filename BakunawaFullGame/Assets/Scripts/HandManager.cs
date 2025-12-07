@@ -9,11 +9,11 @@ public class HandManager : MonoBehaviour
 
     [Header("Areas")]
     public GameObject cardPrefab;
-    public Transform handArea;         // Start/Hand
-    public Transform lockedHandArea;   // Locked (Center)
-    public Transform deckPileArea;     // Unused Pile (Right)
-    public Transform battleZone;       // Play Zone (Center - NEEDS LAYOUT GROUP)
-    public Transform discardPileArea;  // Discard Pile (Left)
+    public Transform handArea;
+    public Transform lockedHandArea;
+    public Transform deckPileArea;
+    public Transform battleZone;
+    public Transform discardPileArea;
 
     [Header("UI Buttons")]
     public Button lockInButton;
@@ -58,8 +58,19 @@ public class HandManager : MonoBehaviour
         foreach (CardData card in myDeck)
         {
             GameObject newCard = Instantiate(cardPrefab, handArea);
+
+            // 1. Setup Visuals (Your existing UI script)
             CardUI ui = newCard.GetComponent<CardUI>();
             ui.Setup(card);
+
+            // 2. Setup Logic (The script for ScoreManager)
+            // MAKE SURE 'CardDisplay' IS ADDED TO YOUR CARD PREFAB!
+            CardDisplay display = newCard.GetComponent<CardDisplay>();
+            if (display != null)
+            {
+                display.cardData = card;
+                display.currentAttack = card.attackValue;
+            }
         }
     }
 
@@ -71,16 +82,13 @@ public class HandManager : MonoBehaviour
         lockInButton.gameObject.SetActive(false);
         playCardButton.gameObject.SetActive(true);
 
-        // 1. Move Selected Cards to Locked Area
         foreach (CardUI card in selectedCardsUI)
         {
             card.transform.SetParent(lockedHandArea);
             card.selectionBorder.SetActive(false);
-            // Turn ON Locked Art
             card.SetLockedState(true);
         }
 
-        // 2. Move Remaining Cards to Right Pile
         List<Transform> remainingCards = new List<Transform>();
         foreach (Transform child in handArea) remainingCards.Add(child);
 
@@ -96,6 +104,11 @@ public class HandManager : MonoBehaviour
             }
         }
         selectedCardsUI.Clear();
+
+        if (BakunawaAI.Instance != null)
+        {
+            BakunawaAI.Instance.LockInPlan();
+        }
     }
 
     public void SelectCardForBattle(CardUI card)
@@ -112,35 +125,119 @@ public class HandManager : MonoBehaviour
     {
         if (currentBattleSelection == null) return;
 
-        // 1. Move Card to Battle Zone
+        // 1. Move Player Card
         currentBattleSelection.transform.SetParent(battleZone);
-
-        // NOTE: We do NOT reset localPosition to zero here anymore.
-        // The Horizontal Layout Group on "BattleZone" handles the position!
-
         currentBattleSelection.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         currentBattleSelection.transform.localRotation = Quaternion.identity;
-
-        // 2. Reveal Card (Turn off Locked Art)
         currentBattleSelection.SetLockedState(false);
-
         currentBattleSelection.selectionBorder.SetActive(false);
+
+        // 2. Cache the card so we can use it for scoring later
+        CardUI playerCard = currentBattleSelection;
         currentBattleSelection = null;
 
-        // Check for End of Round
-        if (lockedHandArea.childCount == 0)
+        playCardButton.interactable = false;
+
+        // 3. Pass the player's card to the sequence
+        StartCoroutine(BakunawaResponseSequence(playerCard));
+    }
+
+    IEnumerator BakunawaResponseSequence(CardUI playerCard)
+    {
+        yield return new WaitForSeconds(1.0f);
+
+        // 1. Bakunawa attempts to play
+        if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
-            Debug.Log("All cards played! Ending round...");
-            playCardButton.interactable = false;
-            StartCoroutine(EndRoundSequence());
+            // --- Get the enemy card returned by PlayCard() ---
+            CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+
+            // --- SCORING LOGIC ---
+            if (ScoreManager.Instance != null)
+            {
+                int pAtk = GetCardAttack(playerCard);
+                int eAtk = GetCardAttack(enemyCard);
+                ScoreManager.Instance.ResolveClash(pAtk, eAtk);
+            }
         }
+        else
+        {
+            // Bakunawa had no cards? Player gets a free hit!
+            if (ScoreManager.Instance != null)
+            {
+                int pAtk = GetCardAttack(playerCard);
+                ScoreManager.Instance.ResolveClash(pAtk, 0); // Enemy attack is 0
+            }
+        }
+
+        yield return new WaitForSeconds(0.5f);
+
+        // 2. Check Player Status
+        if (lockedHandArea.childCount > 0)
+        {
+            playCardButton.interactable = true;
+        }
+        else
+        {
+            if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
+            {
+                Debug.Log("Player finished, Bakunawa finishing hand...");
+                StartCoroutine(BakunawaSoloPlaySequence());
+            }
+            else
+            {
+                Debug.Log("All cards played! Ending round...");
+                StartCoroutine(EndRoundSequence());
+            }
+        }
+    }
+
+    // --- LOOP for Bakunawa to finish playing (Free Hits) ---
+    IEnumerator BakunawaSoloPlaySequence()
+    {
+        while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
+        {
+            yield return new WaitForSeconds(1.0f);
+
+            CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+
+            // --- SCORE LOGIC (Player has 0 defense here) ---
+            if (ScoreManager.Instance != null)
+            {
+                int eAtk = GetCardAttack(enemyCard);
+                ScoreManager.Instance.ResolveClash(0, eAtk);
+            }
+
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        StartCoroutine(EndRoundSequence());
+    }
+
+    // Helper to get attack value safely
+    int GetCardAttack(CardUI card)
+    {
+        if (card == null) return 0;
+
+        // 1. Try to get it from CardDisplay first (Logic)
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null)
+        {
+            return display.currentAttack;
+        }
+
+        // 2. Fallback to reading the text (Visual)
+        if (card.attackText != null && int.TryParse(card.attackText.text, out int val))
+        {
+            return val;
+        }
+        return 0;
     }
 
     IEnumerator EndRoundSequence()
     {
         yield return new WaitForSeconds(2.0f);
 
-        // Move played cards to Discard Pile
         List<CardUI> playedCards = new List<CardUI>();
         foreach (Transform child in battleZone)
         {
@@ -151,6 +248,11 @@ public class HandManager : MonoBehaviour
         foreach (CardUI card in playedCards)
         {
             MoveToPile(card, discardPileArea, true);
+        }
+
+        if (BakunawaAI.Instance != null)
+        {
+            BakunawaAI.Instance.CleanupRound();
         }
 
         yield return new WaitForSeconds(1.0f);
@@ -173,7 +275,6 @@ public class HandManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("Deck Empty! Reshuffling Discard Pile...");
             List<CardUI> discardedCards = new List<CardUI>();
             foreach (Transform child in discardPileArea)
             {

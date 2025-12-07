@@ -265,7 +265,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 91.7, y: 162.9}
+  m_AnchoredPosition: {x: 96.1, y: -162.6}
   m_SizeDelta: {x: 43.695, y: 45.653}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8125251036127694081
@@ -299,7 +299,7 @@ MonoBehaviour:
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
     m_FontSize: 30
-    m_FontStyle: 0
+    m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 3
     m_MaxSize: 40
@@ -421,7 +421,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -94.5, y: 162.9}
+  m_AnchoredPosition: {x: -78.5, y: -158.1}
   m_SizeDelta: {x: 43.6954, y: 45.6534}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2921443256052967817
@@ -445,7 +445,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0.06672954, b: 0.9433962, a: 1}
+  m_Color: {r: 0, g: 0, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -455,7 +455,7 @@ MonoBehaviour:
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
     m_FontSize: 30
-    m_FontStyle: 0
+    m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 3
     m_MaxSize: 40
@@ -500,7 +500,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 1.2216, y: -119}
+  m_AnchoredPosition: {x: 0.00016451, y: -101.05}
   m_SizeDelta: {x: 216.876, y: 68.4547}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4691737565060161675
@@ -786,6 +786,7 @@ GameObject:
   - component: {fileID: 5690379023562361219}
   - component: {fileID: 2533713546547588918}
   - component: {fileID: 7793512619305228984}
+  - component: {fileID: -7152160072729639188}
   m_Layer: 5
   m_Name: CardPrefab
   m_TagString: Untagged
@@ -876,5 +877,20 @@ MonoBehaviour:
   selectionBorder: {fileID: 4541180945689914086}
   cardBackObject: {fileID: 6169300986534241884}
   lockedArtObject: {fileID: 1020274286349391496}
-  lockedCostText: {fileID: 8027670441604492704}
-  lockedAttackText: {fileID: 9136386244761063236}
+  lockedCostObject: {fileID: 8027670441604492704}
+  lockedAttackObject: {fileID: 9136386244761063236}
+  isEnemy: 0
+--- !u!114 &-7152160072729639188
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8458815608511427349}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98ce9398d5dcc6a4d98f8aef50157851, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CardDisplay
+  cardData: {fileID: 0}
+  currentAttack: 0

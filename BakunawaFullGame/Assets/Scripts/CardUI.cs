@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
     [Header("UI References")]
-    public Image cardFrameImage;     // The Big White Frame
+    public Image cardFrameImage;     // The White Background Image
     public Image artworkImage;       // The Character Art
     public Text nameText;
     public Text costText;
@@ -17,54 +17,63 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public GameObject lockedArtObject;
 
     [Header("Locked Info References")]
-    public Text lockedCostText;
-    public Text lockedAttackText;
+    public Text lockedCostObject;
+    public Text lockedAttackObject;
+
+    [Header("Settings")]
+    public bool isEnemy = false;
 
     private CardData data;
-    private bool isSelected = false;
-
-    // Hold Variables
     private bool isPressed = false;
     private float pressTimer = 0f;
     private bool detailsShown = false;
+    private float holdTimeNeeded = 0.5f; // Time in seconds to hold before showing details
 
     public void Setup(CardData cardData)
     {
         data = cardData;
 
-        // 1. Setup Normal Data
-        nameText.text = data.cardName;
-        costText.text = data.energyCost.ToString();
-        attackText.text = data.attackValue.ToString();
-        if (data.cardArt != null) artworkImage.sprite = data.cardArt;
+        // Setup Texts
+        if (nameText != null) nameText.text = data.cardName;
+        if (costText != null) costText.text = data.energyCost.ToString();
+        if (attackText != null) attackText.text = data.attackValue.ToString();
 
-        // 2. Setup Locked Data
-        if (lockedCostText != null) lockedCostText.text = data.energyCost.ToString();
-        if (lockedAttackText != null) lockedAttackText.text = data.attackValue.ToString();
+        if (data.cardArt != null && artworkImage != null) artworkImage.sprite = data.cardArt;
 
-        // 3. Reset to "Normal" State (Everything Visible)
-        selectionBorder.SetActive(false);
+        // Setup Locked Info Texts (Find the text components inside the objects)
+        if (lockedCostObject != null)
+        {
+            Text txt = lockedCostObject.GetComponent<Text>();
+            if (txt != null) txt.text = data.energyCost.ToString();
+        }
+        if (lockedAttackObject != null)
+        {
+            Text txt = lockedAttackObject.GetComponent<Text>();
+            if (txt != null) txt.text = data.attackValue.ToString();
+        }
+
+        // Reset States (Hide everything special)
+        if (selectionBorder != null) selectionBorder.SetActive(false);
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
-        // Make sure normal stuff is ON
+        // Start with everything VISIBLE (Normal Card)
         SetVisualsVisible(true);
-
-        cardFrameImage.color = Color.white;
+        if (cardFrameImage != null) cardFrameImage.color = Color.white;
     }
 
-    // --- UPDATED FUNCTION: Hides the white frame when Locked! ---
+    // --- MAIN FUNCTION: LOCKING ---
     public void SetLockedState(bool isLocked)
     {
-        // 1. Toggle the Locked Art
+        // 1. Show the Black Star if locked
         if (lockedArtObject != null) lockedArtObject.SetActive(isLocked);
 
-        // 2. Toggle the Normal Visuals (Frame, Art, Text)
-        // If Locked is TRUE, Normal Visuals should be FALSE (Hidden)
+        // 2. Hide the White Frame/Text if locked
+        // If isLocked is TRUE -> SetVisualsVisible(FALSE) -> Hides Frame
         SetVisualsVisible(!isLocked);
     }
 
-    // Helper to turn on/off the normal card parts
+    // Helper to toggle the main card parts (Frame, Art, Text)
     void SetVisualsVisible(bool isVisible)
     {
         if (cardFrameImage != null) cardFrameImage.enabled = isVisible;
@@ -79,25 +88,24 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (cardBackObject != null) cardBackObject.SetActive(showBack);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
-        // If showing front, ensure frame is visible. If back, hide frame/art? 
-        // Usually Deck Mode just covers everything with the Back object, 
-        // so we can leave the frame on behind it.
+        // Ensure the frame is ON so the card exists physically in the pile
         SetVisualsVisible(true);
 
-        this.enabled = false;
+        this.enabled = false; // Disable interactions
     }
 
     public void ResetToHandMode()
     {
-        this.enabled = true;
+        this.enabled = true; // Re-enable interactions
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
-        selectionBorder.SetActive(false);
+        if (selectionBorder != null) selectionBorder.SetActive(false);
 
-        // Make sure everything is visible again!
+        // Ensure everything is visible again for the hand
         SetVisualsVisible(true);
     }
 
+    // --- Input Handling ---
     public void OnPointerDown(PointerEventData eventData)
     {
         isPressed = true;
@@ -111,14 +119,21 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
         if (detailsShown)
         {
-            HandManager.Instance.HideCardDetails();
+            if (HandManager.Instance != null) HandManager.Instance.HideCardDetails();
         }
         else
         {
+            if (HandManager.Instance == null) return;
+
+            if (isEnemy) return; // Don't select enemy cards
+
             if (HandManager.Instance.isPlanningPhase)
             {
-                HandManager.Instance.ToggleCardSelection(this, !selectionBorder.activeSelf);
-                selectionBorder.SetActive(!selectionBorder.activeSelf);
+                if (selectionBorder != null)
+                {
+                    HandManager.Instance.ToggleCardSelection(this, !selectionBorder.activeSelf);
+                    selectionBorder.SetActive(!selectionBorder.activeSelf);
+                }
             }
             else
             {
@@ -129,13 +144,18 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     void Update()
     {
+        // Logic to detect "Holding Down" the click
         if (isPressed && !detailsShown)
         {
             pressTimer += Time.deltaTime;
-            if (pressTimer >= 0.5f)
+
+            if (pressTimer >= holdTimeNeeded)
             {
-                HandManager.Instance.ShowCardDetails(data);
                 detailsShown = true;
+                if (HandManager.Instance != null)
+                {
+                    HandManager.Instance.ShowCardDetails(data);
+                }
             }
         }
     }

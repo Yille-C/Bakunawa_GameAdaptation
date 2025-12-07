@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc31a090c49b0714995e5f986f5d51d0, type: 3}
+  m_Name: BakunawaAtt 5
+  m_EditorClassIdentifier: Assembly-CSharp::CardData
+  cardName: Primal Bite
+  type: 0
+  energyCost: 1
+  attackValue: 4
+  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  description: No additional effect.
+  effectID: none
