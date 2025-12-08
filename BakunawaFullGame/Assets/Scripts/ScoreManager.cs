@@ -3,48 +3,104 @@ using UnityEngine.UI;
 
 public class ScoreManager : MonoBehaviour
 {
-    // Necessary for HandManager to find this script
     public static ScoreManager Instance;
+
+    [Header("Tower Slider")]
+    public Slider towerSlider; // Set Min: -5, Max: 5, Value: 0 in Inspector
+    public int currentTowerScore = 0;
 
     [Header("UI Text")]
     public Text playerScoreText;
     public Text bakunawaScoreText;
 
     [Header("Zones")]
-    // Drag the "Player Board/Row" object here
     public Transform playerZone;
-    // Drag the "Bakunawa Board/Row" object here
     public Transform bakunawaZone;
 
-    // Public so you can see totals in Inspector
+    // These hold the total score for the current round
     public int playerTotal;
     public int bakunawaTotal;
 
     void Awake()
     {
-        if (Instance == null)
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
+
+    void Start()
+    {
+        if (towerSlider != null)
         {
-            Instance = this;
+            towerSlider.minValue = -5;
+            towerSlider.maxValue = 5;
+            towerSlider.wholeNumbers = true;
+            towerSlider.value = 0;
         }
-        else
-        {
-            Destroy(gameObject);
-        }
+        currentTowerScore = 0;
     }
 
     void Update()
     {
-        // Calculate and Update UI every frame
         CalculateBoardTotals();
     }
 
-    // HandManager calls this to handle the battle logic (e.g., Log who won)
+    // Called during the card fight - purely visual log now, NO MARKER MOVEMENT
     public void ResolveClash(int pAtk, int eAtk)
     {
-        // We do NOT update the text here. We let CalculateBoardTotals() handle the UI.
-        Debug.Log($"<color=yellow>CLASH!</color> Player Card: {pAtk} vs Bakunawa Card: {eAtk}");
+        Debug.Log($"Clash! P:{pAtk} vs B:{eAtk}");
+    }
 
-        // Add specific damage logic here if needed (e.g. Tower health)
+    // --- NEW FUNCTION: Called ONLY when the round ends ---
+    public void ResolveRound()
+    {
+        Debug.Log($"<color=green>ROUND END!</color> Final Score - Player: {playerTotal} vs Bakunawa: {bakunawaTotal}");
+
+        if (playerTotal > bakunawaTotal)
+        {
+            Debug.Log("Player Wins Round! Moving Marker Down.");
+            UpdateTowerScore(-1);
+        }
+        else if (bakunawaTotal > playerTotal)
+        {
+            Debug.Log("Bakunawa Wins Round! Moving Marker Up.");
+            UpdateTowerScore(1);
+        }
+        else
+        {
+            Debug.Log("Round Draw! Marker stays put.");
+        }
+    }
+
+    void UpdateTowerScore(int change)
+    {
+        int previousScore = currentTowerScore;
+        int nextScore = currentTowerScore + change;
+
+        // --- SKIP ZERO LOGIC ---
+        if (nextScore == 0)
+        {
+            // If we were at 1 and go down, skip 0 -> go to -1
+            if (previousScore > 0 && change < 0)
+            {
+                nextScore = -1;
+            }
+            // If we were at -1 and go up, skip 0 -> go to 1
+            else if (previousScore < 0 && change > 0)
+            {
+                nextScore = 1;
+            }
+        }
+
+        // Clamp values
+        currentTowerScore = Mathf.Clamp(nextScore, -5, 5);
+
+        // Update Slider
+        if (towerSlider != null)
+        {
+            towerSlider.value = currentTowerScore;
+        }
+
+        Debug.Log($"Marker moved from {previousScore} to {currentTowerScore}");
     }
 
     void CalculateBoardTotals()
@@ -52,34 +108,24 @@ public class ScoreManager : MonoBehaviour
         playerTotal = 0;
         bakunawaTotal = 0;
 
-        // 1. Calculate Player Total
         if (playerZone != null)
         {
             foreach (Transform card in playerZone)
             {
-                // We look for the component that HandManager just set up
                 CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null)
-                {
-                    playerTotal += display.currentAttack;
-                }
+                if (display != null) playerTotal += display.currentAttack;
             }
         }
 
-        // 2. Calculate Bakunawa Total
         if (bakunawaZone != null)
         {
             foreach (Transform card in bakunawaZone)
             {
                 CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null)
-                {
-                    bakunawaTotal += display.currentAttack;
-                }
+                if (display != null) bakunawaTotal += display.currentAttack;
             }
         }
 
-        // 3. Update the UI Text to show the SUM of all cards
         if (playerScoreText != null) playerScoreText.text = playerTotal.ToString();
         if (bakunawaScoreText != null) bakunawaScoreText.text = bakunawaTotal.ToString();
     }

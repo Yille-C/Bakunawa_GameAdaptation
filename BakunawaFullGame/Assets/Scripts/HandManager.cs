@@ -7,6 +7,16 @@ public class HandManager : MonoBehaviour
 {
     public static HandManager Instance;
 
+    [Header("Combat Banner")]
+    public GameObject combatBanner;   // Drag your Panel (with the image attached) here
+    public float bannerDuration = 2.0f;
+
+    [Header("Energy System")]
+    public Slider energySlider;
+    public Text energyText;
+    public Text warningText;
+    public int maxEnergy = 10;
+
     [Header("Areas")]
     public GameObject cardPrefab;
     public Transform handArea;
@@ -15,13 +25,15 @@ public class HandManager : MonoBehaviour
     public Transform battleZone;
     public Transform discardPileArea;
 
-    [Header("UI Buttons")]
+    [Header("UI Controls")]
     public Button lockInButton;
     public Button playCardButton;
+    public Text timerText;
 
     [Header("Settings")]
     public float playCardScale = 1.2f;
     public float discardScale = 0.8f;
+    public float planningTime = 60f;
 
     [Header("Details UI")]
     public GameObject detailsPanel;
@@ -34,6 +46,7 @@ public class HandManager : MonoBehaviour
     private List<CardUI> selectedCardsUI = new List<CardUI>();
 
     public bool isPlanningPhase = true;
+    private float currentTimer;
     private CardUI currentBattleSelection;
 
     void Awake()
@@ -44,27 +57,121 @@ public class HandManager : MonoBehaviour
     void Start()
     {
         detailsPanel.SetActive(false);
+        if (warningText != null) warningText.gameObject.SetActive(false);
+        if (combatBanner != null) combatBanner.SetActive(false); // Ensure banner starts hidden
+
         lockInButton.onClick.AddListener(OnLockInPressed);
         playCardButton.onClick.AddListener(OnPlayButtonPressed);
 
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
 
+        currentTimer = planningTime;
         SpawnDeck();
+        SetEnergyUIActive(true);
+        UpdateEnergyUI();
     }
+
+    void Update()
+    {
+        if (isPlanningPhase)
+        {
+            currentTimer -= Time.deltaTime;
+
+            if (timerText != null)
+            {
+                float displayTime = currentTimer < 0 ? 0 : currentTimer;
+                int minutes = Mathf.FloorToInt(displayTime / 60F);
+                int seconds = Mathf.FloorToInt(displayTime % 60F);
+                timerText.text = string.Format("{0}:{1:00}", minutes, seconds);
+
+                if (currentTimer <= 10f) timerText.color = Color.red;
+                else timerText.color = Color.white;
+            }
+
+            if (currentTimer <= 0)
+            {
+                currentTimer = 0;
+                OnLockInPressed();
+            }
+        }
+    }
+
+    // --- ENERGY SYSTEM ---
+    void UpdateEnergyUI()
+    {
+        int currentUsed = 0;
+        foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card);
+        int remaining = maxEnergy - currentUsed;
+
+        if (energySlider != null)
+        {
+            energySlider.maxValue = maxEnergy;
+            energySlider.value = Mathf.Max(0, remaining);
+        }
+        if (energyText != null)
+        {
+            energyText.text = remaining.ToString();
+            if (remaining < 0) energyText.color = Color.red;
+            else energyText.color = Color.white;
+        }
+    }
+
+    void SetEnergyUIActive(bool isActive)
+    {
+        if (energySlider != null) energySlider.gameObject.SetActive(isActive);
+        if (energyText != null) energyText.gameObject.SetActive(isActive);
+    }
+
+    public bool ToggleCardSelection(CardUI cardUI, bool isSelected)
+    {
+        if (!isPlanningPhase) return false;
+
+        if (isSelected) selectedCardsUI.Add(cardUI);
+        else selectedCardsUI.Remove(cardUI);
+
+        UpdateEnergyUI();
+        return true;
+    }
+
+    IEnumerator ShowWarningSequence()
+    {
+        if (warningText != null)
+        {
+            warningText.gameObject.SetActive(true);
+            warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, 1);
+            yield return new WaitForSeconds(0.5f);
+            float duration = 1.0f;
+            float currentTime = 0f;
+            while (currentTime < duration)
+            {
+                float alpha = Mathf.Lerp(1f, 0f, currentTime / duration);
+                warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, alpha);
+                currentTime += Time.deltaTime;
+                yield return null;
+            }
+            warningText.gameObject.SetActive(false);
+        }
+    }
+
+    int GetCardCost(CardUI card)
+    {
+        if (card == null) return 0;
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null && display.cardData != null) return display.cardData.energyCost;
+        if (card.costText != null && int.TryParse(card.costText.text, out int val)) return val;
+        return 0;
+    }
+
+    // --- MAIN GAME LOOP ---
 
     void SpawnDeck()
     {
         foreach (CardData card in myDeck)
         {
             GameObject newCard = Instantiate(cardPrefab, handArea);
-
-            // 1. Setup Visuals (Your existing UI script)
             CardUI ui = newCard.GetComponent<CardUI>();
             ui.Setup(card);
-
-            // 2. Setup Logic (The script for ScoreManager)
-            // MAKE SURE 'CardDisplay' IS ADDED TO YOUR CARD PREFAB!
             CardDisplay display = newCard.GetComponent<CardDisplay>();
             if (display != null)
             {
@@ -76,11 +183,22 @@ public class HandManager : MonoBehaviour
 
     void OnLockInPressed()
     {
-        if (selectedCardsUI.Count == 0) return;
+        // 1. Validate Energy
+        int currentUsed = 0;
+        foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card);
 
+        if (currentUsed > maxEnergy)
+        {
+            Debug.Log("Cannot Lock In: Not Enough Energy!");
+            StartCoroutine(ShowWarningSequence());
+            return;
+        }
+
+        // 2. Lock Everything
         isPlanningPhase = false;
         lockInButton.gameObject.SetActive(false);
-        playCardButton.gameObject.SetActive(true);
+        if (timerText != null) timerText.text = "";
+        SetEnergyUIActive(false);
 
         foreach (CardUI card in selectedCardsUI)
         {
@@ -91,7 +209,6 @@ public class HandManager : MonoBehaviour
 
         List<Transform> remainingCards = new List<Transform>();
         foreach (Transform child in handArea) remainingCards.Add(child);
-
         foreach (Transform child in remainingCards)
         {
             CardUI card = child.GetComponent<CardUI>();
@@ -109,6 +226,70 @@ public class HandManager : MonoBehaviour
         {
             BakunawaAI.Instance.LockInPlan();
         }
+
+        // 3. START BANNER SEQUENCE (Animation)
+        StartCoroutine(CombatBannerSequence());
+    }
+
+    // Handles the flashy banner animation
+    IEnumerator CombatBannerSequence()
+    {
+        if (combatBanner != null)
+        {
+            combatBanner.SetActive(true);
+
+            // Get the CanvasGroup for fading. If it's missing, it will just pop in/out without fade.
+            CanvasGroup group = combatBanner.GetComponent<CanvasGroup>();
+            if (group != null)
+            {
+                // Fade In
+                group.alpha = 0;
+                float fadeSpeed = 2f;
+                while (group.alpha < 1)
+                {
+                    group.alpha += Time.deltaTime * fadeSpeed;
+                    yield return null;
+                }
+            }
+
+            // Wait duration
+            yield return new WaitForSeconds(bannerDuration);
+
+            // Fade Out
+            if (group != null)
+            {
+                float fadeSpeed = 2f;
+                while (group.alpha > 0)
+                {
+                    group.alpha -= Time.deltaTime * fadeSpeed;
+                    yield return null;
+                }
+            }
+
+            combatBanner.SetActive(false);
+        }
+        else
+        {
+            // Fallback delay if no banner assigned
+            yield return new WaitForSeconds(1.0f);
+        }
+
+        // 4. Start the Actual Battle Logic
+        StartBattlePhase();
+    }
+
+    void StartBattlePhase()
+    {
+        if (lockedHandArea.childCount > 0)
+        {
+            playCardButton.gameObject.SetActive(true);
+        }
+        else
+        {
+            Debug.Log("Player has 0 cards! Proceeding to Bakunawa Turn...");
+            playCardButton.gameObject.SetActive(false);
+            StartCoroutine(BakunawaSoloPlaySequence());
+        }
     }
 
     public void SelectCardForBattle(CardUI card)
@@ -125,20 +306,16 @@ public class HandManager : MonoBehaviour
     {
         if (currentBattleSelection == null) return;
 
-        // 1. Move Player Card
         currentBattleSelection.transform.SetParent(battleZone);
         currentBattleSelection.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         currentBattleSelection.transform.localRotation = Quaternion.identity;
         currentBattleSelection.SetLockedState(false);
         currentBattleSelection.selectionBorder.SetActive(false);
 
-        // 2. Cache the card so we can use it for scoring later
         CardUI playerCard = currentBattleSelection;
         currentBattleSelection = null;
-
         playCardButton.interactable = false;
 
-        // 3. Pass the player's card to the sequence
         StartCoroutine(BakunawaResponseSequence(playerCard));
     }
 
@@ -146,13 +323,9 @@ public class HandManager : MonoBehaviour
     {
         yield return new WaitForSeconds(1.0f);
 
-        // 1. Bakunawa attempts to play
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
-            // --- Get the enemy card returned by PlayCard() ---
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-
-            // --- SCORING LOGIC ---
             if (ScoreManager.Instance != null)
             {
                 int pAtk = GetCardAttack(playerCard);
@@ -162,17 +335,15 @@ public class HandManager : MonoBehaviour
         }
         else
         {
-            // Bakunawa had no cards? Player gets a free hit!
             if (ScoreManager.Instance != null)
             {
                 int pAtk = GetCardAttack(playerCard);
-                ScoreManager.Instance.ResolveClash(pAtk, 0); // Enemy attack is 0
+                ScoreManager.Instance.ResolveClash(pAtk, 0);
             }
         }
 
         yield return new WaitForSeconds(0.5f);
 
-        // 2. Check Player Status
         if (lockedHandArea.childCount > 0)
         {
             playCardButton.interactable = true;
@@ -181,61 +352,44 @@ public class HandManager : MonoBehaviour
         {
             if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
             {
-                Debug.Log("Player finished, Bakunawa finishing hand...");
                 StartCoroutine(BakunawaSoloPlaySequence());
             }
             else
             {
-                Debug.Log("All cards played! Ending round...");
                 StartCoroutine(EndRoundSequence());
             }
         }
     }
 
-    // --- LOOP for Bakunawa to finish playing (Free Hits) ---
     IEnumerator BakunawaSoloPlaySequence()
     {
         while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             yield return new WaitForSeconds(1.0f);
-
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-
-            // --- SCORE LOGIC (Player has 0 defense here) ---
             if (ScoreManager.Instance != null)
             {
                 int eAtk = GetCardAttack(enemyCard);
                 ScoreManager.Instance.ResolveClash(0, eAtk);
             }
-
             yield return new WaitForSeconds(0.5f);
         }
-
         StartCoroutine(EndRoundSequence());
     }
 
-    // Helper to get attack value safely
     int GetCardAttack(CardUI card)
     {
         if (card == null) return 0;
-
-        // 1. Try to get it from CardDisplay first (Logic)
         CardDisplay display = card.GetComponent<CardDisplay>();
-        if (display != null)
-        {
-            return display.currentAttack;
-        }
-
-        // 2. Fallback to reading the text (Visual)
-        if (card.attackText != null && int.TryParse(card.attackText.text, out int val))
-        {
-            return val;
-        }
+        if (display != null) return display.currentAttack;
+        if (card.attackText != null && int.TryParse(card.attackText.text, out int val)) return val;
         return 0;
     }
 
     IEnumerator EndRoundSequence()
     {
+        if (ScoreManager.Instance != null) ScoreManager.Instance.ResolveRound();
+
         yield return new WaitForSeconds(2.0f);
 
         List<CardUI> playedCards = new List<CardUI>();
@@ -244,16 +398,9 @@ public class HandManager : MonoBehaviour
             CardUI card = child.GetComponent<CardUI>();
             if (card != null) playedCards.Add(card);
         }
+        foreach (CardUI card in playedCards) MoveToPile(card, discardPileArea, true);
 
-        foreach (CardUI card in playedCards)
-        {
-            MoveToPile(card, discardPileArea, true);
-        }
-
-        if (BakunawaAI.Instance != null)
-        {
-            BakunawaAI.Instance.CleanupRound();
-        }
+        if (BakunawaAI.Instance != null) BakunawaAI.Instance.CleanupRound();
 
         yield return new WaitForSeconds(1.0f);
         StartNextRound();
@@ -261,8 +408,6 @@ public class HandManager : MonoBehaviour
 
     void StartNextRound()
     {
-        Debug.Log("Starting Next Round...");
-
         if (deckPileArea.childCount > 0)
         {
             List<CardUI> unusedCards = new List<CardUI>();
@@ -286,9 +431,16 @@ public class HandManager : MonoBehaviour
         }
 
         isPlanningPhase = true;
+        currentTimer = planningTime;
+        if (timerText != null) timerText.color = Color.white;
+
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
         playCardButton.interactable = true;
+
+        selectedCardsUI.Clear();
+        SetEnergyUIActive(true);
+        UpdateEnergyUI();
     }
 
     void ReturnCardToHand(CardUI card)
@@ -317,13 +469,6 @@ public class HandManager : MonoBehaviour
             list[i] = list[randomIndex];
             list[randomIndex] = temp;
         }
-    }
-
-    public void ToggleCardSelection(CardUI cardUI, bool isSelected)
-    {
-        if (!isPlanningPhase) return;
-        if (isSelected) selectedCardsUI.Add(cardUI);
-        else selectedCardsUI.Remove(cardUI);
     }
 
     public void ShowCardDetails(CardData data)
