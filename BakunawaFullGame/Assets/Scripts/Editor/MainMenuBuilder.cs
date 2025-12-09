@@ -53,7 +53,7 @@ public class MainMenuBuilder : EditorWindow
         logoRect.sizeDelta = new Vector2(250, 250);
         Sprite logoSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/UI/BakunawaLogo.png");
         if (logoSprite != null) logoObj.GetComponent<Image>().sprite = logoSprite;
-
+        
         // 5. Title (Center, below logo)
         GameObject titleObj = CreateText("TitleText", "RISE OF THE BAKUNAWA", canvasObj.transform);
         RectTransform titleRect = titleObj.GetComponent<RectTransform>();
@@ -83,6 +83,12 @@ public class MainMenuBuilder : EditorWindow
             towerObj.GetComponent<Image>().sprite = towerSprite;
             towerObj.GetComponent<Image>().preserveAspect = true;
         }
+        
+        // Anim Tower
+        var towerAnim = towerObj.AddComponent<UIFloatingAnimation>();
+        ReflectionExtensions.SetPrivateField(towerAnim, "moveAmount", new Vector2(5f, 5f));
+        ReflectionExtensions.SetPrivateField(towerAnim, "scaleAmount", new Vector2(0.02f, 0.02f));
+        ReflectionExtensions.SetPrivateField(towerAnim, "animateScale", true);
 
         // 7. Buttons Container (Bottom Left area)
         GameObject btnContainer = new GameObject("ButtonContainer");

@@ -29,7 +29,7 @@ public class UIButtonAnimation : MonoBehaviour, IPointerEnterHandler, IPointerEx
         // If main manager has one, maybe use that?
         if (audioSource == null)
         {
-            var manager = FindObjectOfType<MainMenuManager>(); // Inefficient if many buttons, but okay for menu
+            var manager = FindFirstObjectByType<MainMenuManager>(); // Inefficient if many buttons, but okay for menu
             // We won't tightly couple, just rely on local or null
         }
     }
