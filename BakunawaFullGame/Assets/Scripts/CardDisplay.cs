@@ -1,24 +1,52 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class CardDisplay : MonoBehaviour
 {
-    // Drag your ScriptableObject (Serpent, Primal Bite) here in the Inspector
     public CardData cardData;
+    [HideInInspector] public int currentAttack;
 
-    // The ScoreManager will read this number
-    [HideInInspector]
-    public int currentAttack;
+    [Header("UI References")]
+    public Text attackText;
+    public Image artImage; // Optional
 
     void Start()
     {
-        // When the game starts, grab the attack value from the data file
+        if (cardData != null)
+        {
+            ResetStats();
+            if (artImage != null) artImage.sprite = cardData.cardArt;
+        }
+    }
+
+    public void ResetStats()
+    {
         if (cardData != null)
         {
             currentAttack = cardData.attackValue;
+            UpdateStatText();
         }
-        else
+    }
+
+    public void ModifyAttack(int amount)
+    {
+        currentAttack += amount;
+        UpdateStatText();
+    }
+
+    void UpdateStatText()
+    {
+        if (attackText != null)
         {
-            Debug.LogError("CardData is missing on " + gameObject.name);
+            attackText.text = currentAttack.ToString();
+
+            // Visual Feedback: Green if buffed, White if normal
+            if (cardData != null && currentAttack > cardData.attackValue)
+                attackText.color = Color.green;
+            else if (cardData != null && currentAttack < cardData.attackValue)
+                attackText.color = Color.red;
+            else
+                attackText.color = Color.white;
         }
     }
 }

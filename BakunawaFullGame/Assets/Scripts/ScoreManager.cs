@@ -6,7 +6,7 @@ public class ScoreManager : MonoBehaviour
     public static ScoreManager Instance;
 
     [Header("Tower Slider")]
-    public Slider towerSlider; // Set Min: -5, Max: 5, Value: 0 in Inspector
+    public Slider towerSlider;
     public int currentTowerScore = 0;
 
     [Header("UI Text")]
@@ -17,9 +17,11 @@ public class ScoreManager : MonoBehaviour
     public Transform playerZone;
     public Transform bakunawaZone;
 
-    // These hold the total score for the current round
     public int playerTotal;
     public int bakunawaTotal;
+
+    // NEW: Stores the total reduction from Player's Defense cards
+    public int enemyDebuffValue = 0;
 
     void Awake()
     {
@@ -37,6 +39,7 @@ public class ScoreManager : MonoBehaviour
             towerSlider.value = 0;
         }
         currentTowerScore = 0;
+        enemyDebuffValue = 0; // Reset
     }
 
     void Update()
@@ -44,31 +47,17 @@ public class ScoreManager : MonoBehaviour
         CalculateBoardTotals();
     }
 
-    // Called during the card fight - purely visual log now, NO MARKER MOVEMENT
     public void ResolveClash(int pAtk, int eAtk)
     {
         Debug.Log($"Clash! P:{pAtk} vs B:{eAtk}");
     }
 
-    // --- NEW FUNCTION: Called ONLY when the round ends ---
     public void ResolveRound()
     {
-        Debug.Log($"<color=green>ROUND END!</color> Final Score - Player: {playerTotal} vs Bakunawa: {bakunawaTotal}");
+        Debug.Log($"ROUND END! Player: {playerTotal} vs Bakunawa: {bakunawaTotal}");
 
-        if (playerTotal > bakunawaTotal)
-        {
-            Debug.Log("Player Wins Round! Moving Marker Down.");
-            UpdateTowerScore(-1);
-        }
-        else if (bakunawaTotal > playerTotal)
-        {
-            Debug.Log("Bakunawa Wins Round! Moving Marker Up.");
-            UpdateTowerScore(1);
-        }
-        else
-        {
-            Debug.Log("Round Draw! Marker stays put.");
-        }
+        if (playerTotal > bakunawaTotal) UpdateTowerScore(-1);
+        else if (bakunawaTotal > playerTotal) UpdateTowerScore(1);
     }
 
     void UpdateTowerScore(int change)
@@ -76,31 +65,14 @@ public class ScoreManager : MonoBehaviour
         int previousScore = currentTowerScore;
         int nextScore = currentTowerScore + change;
 
-        // --- SKIP ZERO LOGIC ---
         if (nextScore == 0)
         {
-            // If we were at 1 and go down, skip 0 -> go to -1
-            if (previousScore > 0 && change < 0)
-            {
-                nextScore = -1;
-            }
-            // If we were at -1 and go up, skip 0 -> go to 1
-            else if (previousScore < 0 && change > 0)
-            {
-                nextScore = 1;
-            }
+            if (previousScore > 0 && change < 0) nextScore = -1;
+            else if (previousScore < 0 && change > 0) nextScore = 1;
         }
 
-        // Clamp values
         currentTowerScore = Mathf.Clamp(nextScore, -5, 5);
-
-        // Update Slider
-        if (towerSlider != null)
-        {
-            towerSlider.value = currentTowerScore;
-        }
-
-        Debug.Log($"Marker moved from {previousScore} to {currentTowerScore}");
+        if (towerSlider != null) towerSlider.value = currentTowerScore;
     }
 
     void CalculateBoardTotals()
@@ -125,6 +97,12 @@ public class ScoreManager : MonoBehaviour
                 if (display != null) bakunawaTotal += display.currentAttack;
             }
         }
+
+        // --- APPLY DEBUFFS HERE ---
+        // Subtract the Defense Card effects from Bakunawa's total
+        bakunawaTotal -= enemyDebuffValue;
+        // Prevent negative score (optional)
+        if (bakunawaTotal < 0) bakunawaTotal = 0;
 
         if (playerScoreText != null) playerScoreText.text = playerTotal.ToString();
         if (bakunawaScoreText != null) bakunawaScoreText.text = bakunawaTotal.ToString();

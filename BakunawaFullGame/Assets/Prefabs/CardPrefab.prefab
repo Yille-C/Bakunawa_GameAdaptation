@@ -894,3 +894,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardDisplay
   cardData: {fileID: 0}
   currentAttack: 0
+  attackText: {fileID: 9136386244761063236}
+  artImage: {fileID: 0}

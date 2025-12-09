@@ -10,12 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc31a090c49b0714995e5f986f5d51d0, type: 3}
-  m_Name: AttackCard 1
+  m_Name: DefenseCard 5
   m_EditorClassIdentifier: Assembly-CSharp::CardData
-  cardName: Bayanihan Strike
-  type: 0
-  energyCost: 4
-  attackValue: 11
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
-  description: +2 Attack for each different card type played this round.
-  effectID: atk_bayanihan
+  cardName: Anito Chant
+  type: 1
+  subtype: 1
+  energyCost: 1
+  attackValue: 3
+  cardArt: {fileID: 903411861, guid: fac6ac52ffa905f4882eb1ef999ddc30, type: 3}
+  description: Reduce Enemy Total Atk by 2.
+  effectID: def_anito

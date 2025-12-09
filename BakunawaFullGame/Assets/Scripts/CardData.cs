@@ -1,6 +1,5 @@
 using UnityEngine;
 
-// This defines the 3 types of cards
 public enum CardType
 {
     Attack,
@@ -8,19 +7,26 @@ public enum CardType
     Support
 }
 
+public enum CardSubtype
+{
+    None,
+    Tribesmen,
+}
+
 [CreateAssetMenu(fileName = "New Card", menuName = "Echoes/Card Data")]
 public class CardData : ScriptableObject
 {
     [Header("Basic Info")]
     public string cardName;
-    public CardType type;       // Dropdown for Red/Blue/Green
+    public CardType type;
+    public CardSubtype subtype; // Added for Sandugo Assault
     public int energyCost;
     public int attackValue;
 
     [Header("Visuals")]
     public Sprite cardArt;
-    [TextArea] public string description; // Big box for text
+    [TextArea] public string description;
 
     [Header("Logic")]
-    public string effectID;     // Use this later for special powers (e.g., "atk_bayanihan")
+    public string effectID;     // KEY: e.g., "atk_bayanihan", "def_palayok"
 }

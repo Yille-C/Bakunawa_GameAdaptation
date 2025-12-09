@@ -8,7 +8,7 @@ public class HandManager : MonoBehaviour
     public static HandManager Instance;
 
     [Header("Combat Banner")]
-    public GameObject combatBanner;   // Drag your Panel (with the image attached) here
+    public GameObject combatBanner;
     public float bannerDuration = 2.0f;
 
     [Header("Energy System")]
@@ -22,7 +22,7 @@ public class HandManager : MonoBehaviour
     public Transform handArea;
     public Transform lockedHandArea;
     public Transform deckPileArea;
-    public Transform battleZone;
+    public Transform battleZone;       // Effects act on cards here
     public Transform discardPileArea;
 
     [Header("UI Controls")]
@@ -58,7 +58,7 @@ public class HandManager : MonoBehaviour
     {
         detailsPanel.SetActive(false);
         if (warningText != null) warningText.gameObject.SetActive(false);
-        if (combatBanner != null) combatBanner.SetActive(false); // Ensure banner starts hidden
+        if (combatBanner != null) combatBanner.SetActive(false);
 
         lockInButton.onClick.AddListener(OnLockInPressed);
         playCardButton.onClick.AddListener(OnPlayButtonPressed);
@@ -111,7 +111,7 @@ public class HandManager : MonoBehaviour
         }
         if (energyText != null)
         {
-            energyText.text = remaining.ToString();
+            energyText.text = remaining.ToString() + "/" + maxEnergy.ToString();
             if (remaining < 0) energyText.color = Color.red;
             else energyText.color = Color.white;
         }
@@ -163,8 +163,6 @@ public class HandManager : MonoBehaviour
         return 0;
     }
 
-    // --- MAIN GAME LOOP ---
-
     void SpawnDeck()
     {
         foreach (CardData card in myDeck)
@@ -183,7 +181,6 @@ public class HandManager : MonoBehaviour
 
     void OnLockInPressed()
     {
-        // 1. Validate Energy
         int currentUsed = 0;
         foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card);
 
@@ -194,7 +191,6 @@ public class HandManager : MonoBehaviour
             return;
         }
 
-        // 2. Lock Everything
         isPlanningPhase = false;
         lockInButton.gameObject.SetActive(false);
         if (timerText != null) timerText.text = "";
@@ -227,22 +223,19 @@ public class HandManager : MonoBehaviour
             BakunawaAI.Instance.LockInPlan();
         }
 
-        // 3. START BANNER SEQUENCE (Animation)
         StartCoroutine(CombatBannerSequence());
     }
 
-    // Handles the flashy banner animation
     IEnumerator CombatBannerSequence()
     {
+        // NO Calculation here! We wait until cards hit the board.
+
         if (combatBanner != null)
         {
             combatBanner.SetActive(true);
-
-            // Get the CanvasGroup for fading. If it's missing, it will just pop in/out without fade.
             CanvasGroup group = combatBanner.GetComponent<CanvasGroup>();
             if (group != null)
             {
-                // Fade In
                 group.alpha = 0;
                 float fadeSpeed = 2f;
                 while (group.alpha < 1)
@@ -252,10 +245,8 @@ public class HandManager : MonoBehaviour
                 }
             }
 
-            // Wait duration
             yield return new WaitForSeconds(bannerDuration);
 
-            // Fade Out
             if (group != null)
             {
                 float fadeSpeed = 2f;
@@ -265,18 +256,49 @@ public class HandManager : MonoBehaviour
                     yield return null;
                 }
             }
-
             combatBanner.SetActive(false);
         }
         else
         {
-            // Fallback delay if no banner assigned
             yield return new WaitForSeconds(1.0f);
         }
 
-        // 4. Start the Actual Battle Logic
         StartBattlePhase();
     }
+
+    // --- LIVE BATTLE CALCULATION ---
+    void RecalculateBattleEffects()
+    {
+        if (CardEffectManager.Instance == null) return;
+
+        // 1. Get Cards currently on the board
+        List<CardUI> playedCards = new List<CardUI>();
+        foreach (Transform t in battleZone)
+        {
+            CardUI c = t.GetComponent<CardUI>();
+            if (c != null) playedCards.Add(c);
+        }
+
+        List<CardUI> enemyCards = new List<CardUI>();
+        if (BakunawaAI.Instance != null && BakunawaAI.Instance.battleZone != null)
+        {
+            foreach (Transform t in BakunawaAI.Instance.battleZone)
+            {
+                CardUI c = t.GetComponent<CardUI>();
+                if (c != null) enemyCards.Add(c);
+            }
+        }
+
+        // 2. Run Math
+        var result = CardEffectManager.Instance.CalculateRoundStats(playedCards, enemyCards);
+
+        // 3. Update Debuffs
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.enemyDebuffValue = result.damageReductionToEnemy;
+        }
+    }
+    // ---------------------------------
 
     void StartBattlePhase()
     {
@@ -286,7 +308,6 @@ public class HandManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("Player has 0 cards! Proceeding to Bakunawa Turn...");
             playCardButton.gameObject.SetActive(false);
             StartCoroutine(BakunawaSoloPlaySequence());
         }
@@ -306,11 +327,15 @@ public class HandManager : MonoBehaviour
     {
         if (currentBattleSelection == null) return;
 
+        // Move to board
         currentBattleSelection.transform.SetParent(battleZone);
         currentBattleSelection.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         currentBattleSelection.transform.localRotation = Quaternion.identity;
         currentBattleSelection.SetLockedState(false);
         currentBattleSelection.selectionBorder.SetActive(false);
+
+        // TRIGGER EFFECT UPDATE
+        RecalculateBattleEffects();
 
         CardUI playerCard = currentBattleSelection;
         currentBattleSelection = null;
@@ -326,6 +351,10 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+
+            // TRIGGER EFFECT UPDATE
+            RecalculateBattleEffects();
+
             if (ScoreManager.Instance != null)
             {
                 int pAtk = GetCardAttack(playerCard);
@@ -367,6 +396,10 @@ public class HandManager : MonoBehaviour
         {
             yield return new WaitForSeconds(1.0f);
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+
+            // TRIGGER EFFECT UPDATE
+            RecalculateBattleEffects();
+
             if (ScoreManager.Instance != null)
             {
                 int eAtk = GetCardAttack(enemyCard);
@@ -441,6 +474,8 @@ public class HandManager : MonoBehaviour
         selectedCardsUI.Clear();
         SetEnergyUIActive(true);
         UpdateEnergyUI();
+
+        if (ScoreManager.Instance != null) ScoreManager.Instance.enemyDebuffValue = 0;
     }
 
     void ReturnCardToHand(CardUI card)

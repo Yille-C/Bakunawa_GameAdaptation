@@ -10,12 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc31a090c49b0714995e5f986f5d51d0, type: 3}
-  m_Name: AttackCard 2
+  m_Name: AttackCard 3
   m_EditorClassIdentifier: Assembly-CSharp::CardData
-  cardName: Spear of Mayari
+  cardName: Sandugo Assault
   type: 0
+  subtype: 1
   energyCost: 3
-  attackValue: 9
+  attackValue: 8
   cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
-  description: +3 Attack if any Support card was played this round.
-  effectID: atk_spear
+  description: +1 Attack for each Tribesmen card played this round.
+  effectID: atk_sandugo
