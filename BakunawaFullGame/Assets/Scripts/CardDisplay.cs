@@ -5,16 +5,25 @@ public class CardDisplay : MonoBehaviour
 {
     public CardData cardData;
     [HideInInspector] public int currentAttack;
+    [HideInInspector] public int lastFrameAttack;
 
     [Header("UI References")]
     public Text attackText;
-    public Image artImage; // Optional
+    public Image artImage;
+
+    [Header("Effects")]
+    public GameObject popupPrefab;
+    // DRAG AN EMPTY GAMEOBJECT HERE TO CONTROL EXACT POSITION
+    public Transform popupSpawnPoint;
 
     void Start()
     {
         if (cardData != null)
         {
-            ResetStats();
+            currentAttack = cardData.attackValue;
+            lastFrameAttack = currentAttack;
+
+            UpdateStatText();
             if (artImage != null) artImage.sprite = cardData.cardArt;
         }
     }
@@ -40,13 +49,45 @@ public class CardDisplay : MonoBehaviour
         {
             attackText.text = currentAttack.ToString();
 
-            // Visual Feedback: Green if buffed, White if normal
-            if (cardData != null && currentAttack > cardData.attackValue)
-                attackText.color = Color.green;
-            else if (cardData != null && currentAttack < cardData.attackValue)
-                attackText.color = Color.red;
-            else
-                attackText.color = Color.white;
+            // --- COLOR CHANGE LOGIC RESTORED ---
+            if (cardData != null)
+            {
+                if (currentAttack > cardData.attackValue)
+                {
+                    attackText.color = Color.green; // Buffed
+                }
+                else if (currentAttack < cardData.attackValue)
+                {
+                    attackText.color = Color.red;   // Debuffed
+                }
+                else
+                {
+                    attackText.color = Color.white; // Normal
+                }
+            }
+            // -----------------------------------
+        }
+    }
+
+    public void TriggerPopup(int changeAmount, string label)
+    {
+        if (popupPrefab != null)
+        {
+            // Use the specific point you set in Unity, or default to center
+            Vector3 spawnPos = transform.position;
+            if (popupSpawnPoint != null)
+            {
+                spawnPos = popupSpawnPoint.position;
+            }
+
+            // Spawn directly in the Canvas hierarchy
+            GameObject popup = Instantiate(popupPrefab, spawnPos, Quaternion.identity, transform.root);
+
+            DamagePopup dp = popup.GetComponent<DamagePopup>();
+            if (dp != null)
+            {
+                dp.Setup(changeAmount, label);
+            }
         }
     }
 }

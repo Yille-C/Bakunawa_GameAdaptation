@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardData
   cardName: Lunar Devastation
   type: 0
+  subtype: 0
   energyCost: 4
   attackValue: 12
-  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  cardArt: {fileID: 1900920685, guid: b7040e9df256ab5429ebe33856d20823, type: 3}
   description: If this card wins the round as a lone card, move Favor marker 1 additional
     space.
-  effectID: bak_win_favor
+  effectID: atk_lunar

@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc31a090c49b0714995e5f986f5d51d0, type: 3}
+  m_Name: BakunawaSup 5
+  m_EditorClassIdentifier: Assembly-CSharp::CardData
+  cardName: Draconic Patience
+  type: 2
+  subtype: 0
+  energyCost: 1
+  attackValue: 3
+  cardArt: {fileID: 2071323990, guid: b8ebe3f14ef66e046a5c334ebc964f48, type: 3}
+  description: "If \u22645 cards left in deck, opponent discards 1."
+  effectID: sup_draconic

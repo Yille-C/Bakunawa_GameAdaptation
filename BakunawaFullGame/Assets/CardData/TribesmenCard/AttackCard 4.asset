@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 2
   attackValue: 7
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
+  cardArt: {fileID: -382894149, guid: c3bd8ef482bf98f4cb31b315187f74b3, type: 3}
   description: +2 Attack if played as your first card.
   effectID: atk_datu

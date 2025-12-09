@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 3
   attackValue: 8
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
+  cardArt: {fileID: 2070159293, guid: a9ce70f3cb78659459dfd0525dedc93a, type: 3}
   description: +1 Attack for each Tribesmen card played this round.
   effectID: atk_sandugo

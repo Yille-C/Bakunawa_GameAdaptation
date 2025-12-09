@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 1
   attackValue: 5
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
+  cardArt: {fileID: 310248164, guid: 2b98184ca5f49c54c928e55dedc3b256, type: 3}
   description: No additional effect.
   effectID: atk_basic

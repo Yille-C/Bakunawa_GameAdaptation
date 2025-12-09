@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardData
   cardName: Deep Sea Fury
   type: 0
+  subtype: 0
   energyCost: 3
   attackValue: 8
-  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  cardArt: {fileID: 189272621, guid: 9135ef2b7ef31a34b93d886aed7cb983, type: 3}
   description: +2 Attack if played after Round 5.
-  effectID: bak_round_late
+  effectID: atk_deepsea

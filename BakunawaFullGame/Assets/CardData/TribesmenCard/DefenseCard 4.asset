@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 2
   attackValue: 5
-  cardArt: {fileID: 903411861, guid: fac6ac52ffa905f4882eb1ef999ddc30, type: 3}
+  cardArt: {fileID: 1897068161, guid: 74a0c5991949eaa43a309128dd1b71ad, type: 3}
   description: Reduce Enemy Total Atk by 2.
   effectID: def_kalasag

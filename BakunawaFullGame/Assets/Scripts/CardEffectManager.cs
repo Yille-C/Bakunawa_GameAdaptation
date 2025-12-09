@@ -11,11 +11,10 @@ public class CardEffectManager : MonoBehaviour
         Instance = this;
     }
 
-    // Returns a class containing the results of the calculation
     public class RoundResult
     {
         public int finalTotalAttack;
-        public int damageReductionToEnemy; // How much to minus from enemy
+        public int damageReductionToEnemy;
     }
 
     public RoundResult CalculateRoundStats(List<CardUI> cardsPlayed, List<CardUI> enemyCards)
@@ -24,14 +23,19 @@ public class CardEffectManager : MonoBehaviour
         int totalAttack = 0;
         int enemyDebuff = 0;
 
-        // 1. Reset all cards to base attack first
+        // 1. SNAPSHOT: Remember old stats
+        Dictionary<CardDisplay, int> oldAttacks = new Dictionary<CardDisplay, int>();
         foreach (CardUI card in cardsPlayed)
         {
             CardDisplay display = card.GetComponent<CardDisplay>();
-            if (display != null) display.ResetStats();
+            if (display != null)
+            {
+                oldAttacks[display] = display.lastFrameAttack;
+                display.ResetStats();
+            }
         }
 
-        // 2. Iterate through cards and apply logic
+        // 2. CALCULATION LOOP
         for (int i = 0; i < cardsPlayed.Count; i++)
         {
             CardUI currentCard = cardsPlayed[i];
@@ -43,110 +47,152 @@ public class CardEffectManager : MonoBehaviour
 
             switch (data.effectID)
             {
-                // --- ATTACK CARDS ---
+                // ==========================
+                //      PLAYER CARDS
+                // ==========================
                 case "atk_bayanihan":
-                    // +2 Attack for each different card type played
                     int uniqueTypes = cardsPlayed.Select(c => c.GetComponent<CardDisplay>().cardData.type).Distinct().Count();
                     currentBuff = uniqueTypes * 2;
                     break;
-
                 case "atk_mayari":
-                    // +3 Attack if any Support card was played
-                    bool hasSupport = cardsPlayed.Any(c => c.GetComponent<CardDisplay>().cardData.type == CardType.Support);
-                    if (hasSupport) currentBuff = 3;
+                    if (cardsPlayed.Any(c => c.GetComponent<CardDisplay>().cardData.type == CardType.Support)) currentBuff = 3;
                     break;
-
                 case "atk_sandugo":
-                    // +1 Attack for each Tribesmen card
                     int tribesmenCount = cardsPlayed.Count(c => c.GetComponent<CardDisplay>().cardData.subtype == CardSubtype.Tribesmen);
                     currentBuff = tribesmenCount * 1;
                     break;
-
                 case "atk_datu":
-                    // +2 Attack if played as your first card
                     if (i == 0) currentBuff = 2;
                     break;
-
-                case "atk_matulis":
-                    // No effect
-                    break;
-
-                // --- DEFENSE CARDS (Debuffs) ---
-                case "def_palayok":
-                    enemyDebuff += 5;
-                    break;
-
-                case "def_agong":
-                    enemyDebuff += 3;
-                    // Note: "Draw card on loss" logic needs to be handled in EndRoundSequence
-                    break;
-
-                case "def_sigaw":
-                    // Reduce enemy Atk by 1 for each card you played
-                    enemyDebuff += cardsPlayed.Count;
-                    break;
-
-                case "def_kalasag":
-                    enemyDebuff += 2;
-                    break;
-
-                case "def_anito":
-                    enemyDebuff += 2;
-                    break;
-
-                // --- SUPPORT CARDS ---
-                case "sup_blessing":
-                    // +2 Attack for every card played
-                    currentBuff = cardsPlayed.Count * 2;
-                    break;
-
+                case "def_palayok": enemyDebuff += 5; break;
+                case "def_agong": enemyDebuff += 3; break;
+                case "def_sigaw": enemyDebuff += cardsPlayed.Count; break;
+                case "def_kalasag": enemyDebuff += 2; break;
+                case "def_anito": enemyDebuff += 2; break;
+                case "sup_blessing": currentBuff = cardsPlayed.Count * 2; break;
                 case "sup_alay":
-                    // Choose: +4 to ALL or Reduce Enemy by 6
-                    // TODO: Add Choice UI. For now, defaulting to +4 Buff All.
-                    // We handle "Buff All" by adding +4 to THIS card's calculation loop? 
-                    // No, "Buff All" implies affecting others.
-                    // Simple hack: We loop through ALL cards right now and add 4.
-                    foreach (CardUI c in cardsPlayed)
-                    {
-                        c.GetComponent<CardDisplay>().ModifyAttack(4);
-                    }
+                    foreach (CardUI c in cardsPlayed) c.GetComponent<CardDisplay>().ModifyAttack(4);
                     break;
-
                 case "sup_kudyapi":
-                    // If played 3+ cards, +1 Atk for every card played
-                    if (cardsPlayed.Count >= 3)
+                    if (cardsPlayed.Count >= 3) currentBuff = cardsPlayed.Count;
+                    break;
+                case "sup_elder": currentBuff = 2; break;
+
+                // ==========================
+                //      BAKUNAWA CARDS
+                // ==========================
+
+                // --- ATTACK ---
+                case "atk_lunar":
+                    break;
+
+                case "atk_daluyon":
+                    int defenseCount = cardsPlayed.Count(c => c.GetComponent<CardDisplay>().cardData.type == CardType.Defense);
+                    currentBuff = defenseCount;
+                    break;
+
+                case "atk_deepsea":
+                    // Updated to use the public roundNumber from HandManager
+                    if (HandManager.Instance != null && HandManager.Instance.roundNumber > 5)
                     {
-                        currentBuff = cardsPlayed.Count;
+                        currentBuff = 2;
                     }
                     break;
 
-                case "sup_gabayan":
-                    // Reveal opponent hand (Visual only)
-                    // Logic would go here: BakunawaAI.Instance.RevealHand();
+                case "atk_serpent":
+                    if (enemyCards != null)
+                    {
+                        currentBuff = enemyCards.Count;
+                    }
                     break;
 
-                case "sup_elder":
-                    // Gain +2 Attack
-                    currentBuff = 2;
+                case "atk_primal":
+                    break;
+
+                // --- DEFENSE ---
+                case "def_eclipse": enemyDebuff += 4; break;
+                case "def_crushing": enemyDebuff += 3; break;
+                case "def_dragon": enemyDebuff += 1; break;
+                case "def_evasive": enemyDebuff += 2; break;
+
+                case "def_armored":
+                    enemyDebuff += 2;
+                    if (enemyCards != null && enemyCards.Count > cardsPlayed.Count)
+                    {
+                        currentBuff = 1;
+                    }
+                    break;
+
+                // --- SUPPORT ---
+                case "sup_ancient":
+                    for (int j = i + 1; j < cardsPlayed.Count; j++)
+                    {
+                        cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2);
+                    }
+                    break;
+
+                case "sup_ocean":
+                    int buffCount = 0;
+                    for (int j = i + 1; j < cardsPlayed.Count; j++)
+                    {
+                        if (buffCount < 2)
+                        {
+                            cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2);
+                            buffCount++;
+                        }
+                    }
+                    break;
+
+                case "sup_predator":
+                    break;
+
+                case "sup_tidal":
+                    break;
+
+                case "sup_draconic":
                     break;
             }
 
-            // Apply Buffs to the specific card
-            if (currentBuff > 0)
-            {
-                display.ModifyAttack(currentBuff);
-            }
+            if (currentBuff > 0) display.ModifyAttack(currentBuff);
         }
 
-        // 3. Sum up the modified attacks
+        // 3. COMPARE & POPUP
         foreach (CardUI card in cardsPlayed)
         {
             CardDisplay display = card.GetComponent<CardDisplay>();
-            if (display != null) totalAttack += display.currentAttack;
+            if (display != null)
+            {
+                int newValue = display.currentAttack;
+                int oldValue = oldAttacks.ContainsKey(display) ? oldAttacks[display] : display.cardData.attackValue;
+                int diff = newValue - oldValue;
+
+                if (diff != 0)
+                {
+                    string label = GetLabelForEffect(display.cardData.effectID);
+                    display.TriggerPopup(diff, label);
+                }
+
+                display.lastFrameAttack = newValue;
+                totalAttack += newValue;
+            }
         }
 
         result.finalTotalAttack = totalAttack;
         result.damageReductionToEnemy = enemyDebuff;
         return result;
+    }
+
+    string GetLabelForEffect(string id)
+    {
+        if (id.Contains("bayanihan")) return "Unity";
+        if (id.Contains("sandugo")) return "Tribesmen";
+        if (id.Contains("daluyon")) return "Wrath";
+        if (id.Contains("deepsea")) return "Fury";
+        if (id.Contains("serpent")) return "Strike";
+        if (id.Contains("armored")) return "Scales";
+        if (id.Contains("ancient")) return "Rage";
+        if (id.Contains("ocean")) return "Blessing";
+
+        return "Buff"; // Default
     }
 }

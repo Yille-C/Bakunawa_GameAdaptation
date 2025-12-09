@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 2
   attackValue: 4
-  cardArt: {fileID: 903411861, guid: fac6ac52ffa905f4882eb1ef999ddc30, type: 3}
+  cardArt: {fileID: 242128520, guid: 4604423c6ac7a294294b67c7033217c2, type: 3}
   description: Reduce Enemy Total Atk by 3.
   effectID: def_agong

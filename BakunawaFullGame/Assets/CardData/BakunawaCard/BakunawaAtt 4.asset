@@ -14,9 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardData
   cardName: Serpent Strike
   type: 0
+  subtype: 0
   energyCost: 2
   attackValue: 6
-  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  cardArt: {fileID: 1477019772, guid: 2b94c2464a6b73f42ae508181e770a21, type: 3}
   description: +1 Attack for each card opponent played before this one in the current
     round.
-  effectID: bak_counter_scale
+  effectID: atk_serpent

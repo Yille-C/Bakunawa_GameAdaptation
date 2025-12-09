@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc31a090c49b0714995e5f986f5d51d0, type: 3}
+  m_Name: BakunawaDef 5
+  m_EditorClassIdentifier: Assembly-CSharp::CardData
+  cardName: Evasive Maneuver
+  type: 1
+  subtype: 0
+  energyCost: 1
+  attackValue: 2
+  cardArt: {fileID: 821251743, guid: 4c34d95a847bc614ab7981e310fce698, type: 3}
+  description: Reduce Enemy Total Atk by 2.
+  effectID: def_evasive

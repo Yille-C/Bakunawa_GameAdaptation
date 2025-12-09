@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 3
   attackValue: 9
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
+  cardArt: {fileID: 282692088, guid: b55ba80ea516e3846afc6506558da22f, type: 3}
   description: +3 Attack if any Support card was played this round.
   effectID: atk_spear

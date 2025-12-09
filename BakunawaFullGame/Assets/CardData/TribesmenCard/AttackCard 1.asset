@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 4
   attackValue: 11
-  cardArt: {fileID: -1166474370, guid: 6ec52da82091d03419fa54b904774ef9, type: 3}
+  cardArt: {fileID: 1585840892, guid: 805133993ad0e6d499774019141bc6de, type: 3}
   description: +2 Attack for each different card type played this round.
   effectID: atk_bayanihan

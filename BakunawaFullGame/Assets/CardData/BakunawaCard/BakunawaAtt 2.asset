@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardData
   cardName: Daluyon's Wrath
   type: 0
+  subtype: 0
   energyCost: 3
   attackValue: 9
-  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  cardArt: {fileID: 5340273, guid: 8e3139c58c44d9c44846bde9ad3808c8, type: 3}
   description: +1 Attack for each Defense card you played this round.
-  effectID: bak_def_scaling
+  effectID: atk_daluyon

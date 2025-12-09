@@ -17,6 +17,6 @@ MonoBehaviour:
   subtype: 1
   energyCost: 3
   attackValue: 2
-  cardArt: {fileID: 903411861, guid: fac6ac52ffa905f4882eb1ef999ddc30, type: 3}
+  cardArt: {fileID: -776443830, guid: 28fc7c379b14a3c419d0db728b96f186, type: 3}
   description: Reduce Enemy Total Atk by 5.
   effectID: def_palayok

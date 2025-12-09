@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardData
   cardName: Primal Bite
   type: 0
+  subtype: 0
   energyCost: 1
   attackValue: 4
-  cardArt: {fileID: 1257505543, guid: 486e647683eb2154198e14d2c4c0082b, type: 3}
+  cardArt: {fileID: -2113121980, guid: d87cab277db288249acbabc6757cb50e, type: 3}
   description: No additional effect.
-  effectID: none
+  effectID: atk_primal
