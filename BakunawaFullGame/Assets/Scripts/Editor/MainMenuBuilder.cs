@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEngine.UI;
 using TMPro;
 using UnityEditor.Events;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 
 public class MainMenuBuilder : EditorWindow
 {
@@ -18,6 +20,14 @@ public class MainMenuBuilder : EditorWindow
             c.renderMode = RenderMode.ScreenSpaceOverlay;
             canvasObj.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             canvasObj.AddComponent<GraphicRaycaster>();
+        }
+
+        // 1.5 Ensure EventSystem
+        if (Object.FindFirstObjectByType<EventSystem>() == null)
+        {
+            GameObject es = new GameObject("EventSystem");
+            es.AddComponent<EventSystem>();
+            es.AddComponent<InputSystemUIInputModule>();
         }
 
         // 2. Main Menu Manager
@@ -158,6 +168,9 @@ public class MainMenuBuilder : EditorWindow
                 UnityEventTools.AddPersistentListener(btn.onClick, action);
             }
         }
+
+        // Add Animation
+        btnObj.AddComponent<UIButtonAnimation>();
 
         return btnObj;
     }
