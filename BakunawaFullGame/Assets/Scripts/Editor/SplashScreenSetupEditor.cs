@@ -95,7 +95,7 @@ public class SplashScreenSetupEditor : EditorWindow
         }
         
         // Update other settings defaults if needed
-        so.FindProperty("nextSceneName").stringValue = "GameScene"; 
+        so.FindProperty("nextSceneName").stringValue = "Main Menu"; 
         
         so.ApplyModifiedProperties();
 

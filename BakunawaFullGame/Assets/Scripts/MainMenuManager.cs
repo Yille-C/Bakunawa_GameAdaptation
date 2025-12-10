@@ -4,13 +4,28 @@ using UnityEngine.UI;
 
 public class MainMenuManager : MonoBehaviour
 {
+    public static MainMenuManager Instance;
+
     [Header("Scene Config")]
-    [Tooltip("Name of the scene to load when Play is clicked")]
     [SerializeField] private string gameSceneName = "GameScene";
 
-    [Header("Panels")]
+    [Header("Main Panels")]
     [SerializeField] private GameObject settingsPanel;
     [SerializeField] private GameObject howToPlayPanel;
+
+    [Header("Multiplayer UI")]
+    [SerializeField] private GameObject multiplayerPanel;
+    [SerializeField] private InputField ipInputField;
+    [SerializeField] private Text statusText;
+    [SerializeField] private GameObject hostJoinButtons;
+    [SerializeField] private GameObject roleSelectionGroup;
+    [SerializeField] private Button btnBack; // <--- NEW: Drag your Back Button here!
+
+    [Header("Role Buttons")]
+    [SerializeField] private Button btnAttacker;
+    [SerializeField] private Button btnTank;
+    [SerializeField] private Button btnSupport;
+    [SerializeField] private Button btnStartGame;
 
     [Header("Audio Settings")]
     [SerializeField] private AudioSource sfxSource;
@@ -18,110 +33,158 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private AudioClip hoverClip;
     [SerializeField] private Slider volumeSlider;
 
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     private void Start()
     {
-        // Initialize Volume from Prefs
+        // Init Volume
         if (volumeSlider != null)
         {
             float savedVol = PlayerPrefs.GetFloat("MasterVolume", 1f);
             volumeSlider.value = savedVol;
             AudioListener.volume = savedVol;
-            
-            // Add listener dynamically
             volumeSlider.onValueChanged.AddListener(SetMasterVolume);
         }
-        else
-        {
-            // Just load the volume if slider missing
-            AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
-        }
 
-        // Fallback: Find Settings Panel if missing
-        if (settingsPanel == null)
+        // Init UI States
+        if (multiplayerPanel != null) multiplayerPanel.SetActive(false);
+        if (roleSelectionGroup != null) roleSelectionGroup.SetActive(false);
+        if (btnStartGame != null) btnStartGame.gameObject.SetActive(false);
+
+        // --- ADDED: Auto-link Back Button ---
+        if (btnBack != null)
         {
-            var settingsMenu = Object.FindFirstObjectByType<SettingsMenu>(FindObjectsInactive.Include);
-            if (settingsMenu != null)
-            {
-                settingsPanel = settingsMenu.gameObject;
-                Debug.Log("MainMenuManager found SettingsPanel dynamically.");
-            }
-            else
-            {
-                // Fallback by name
-                settingsPanel = GameObject.Find("SettingsPanel");
-                if (settingsPanel == null) settingsPanel = GameObject.Find("Settings Panel");
-            }
+            btnBack.onClick.AddListener(CloseMultiplayer);
         }
     }
 
-    // --- Button Events ---
+    // --- BUTTON EVENTS ---
 
     public void OnPlayClicked()
     {
         PlayClickSound();
-        Debug.Log("Play Clicked");
-        
-        if (LoadingScreenManager.Instance != null)
+
+        // NOW OPENS MULTIPLAYER PANEL
+        if (multiplayerPanel != null)
         {
-            LoadingScreenManager.Instance.LoadScene(gameSceneName);
+            multiplayerPanel.SetActive(true);
+            hostJoinButtons.SetActive(true);
+            roleSelectionGroup.SetActive(false);
+            statusText.text = "Enter Host IP or Click Host";
         }
         else
         {
-            SceneManager.LoadScene(gameSceneName);
+            Debug.LogError("Multiplayer Panel is not assigned in Inspector!");
         }
     }
+
+    public void OnHostGameClicked()
+    {
+        PlayClickSound();
+        string myIP = SimpleNetworkManager.Instance.StartHost();
+        statusText.text = "Hosting on IP: " + myIP + "\nWaiting for players...";
+
+        EnterLobbyUI();
+        btnStartGame.gameObject.SetActive(true);
+    }
+
+    public void OnJoinGameClicked()
+    {
+        PlayClickSound();
+        string ip = ipInputField.text;
+        if (string.IsNullOrEmpty(ip)) ip = "127.0.0.1";
+
+        statusText.text = "Connecting to " + ip + "...";
+
+        bool success = SimpleNetworkManager.Instance.JoinGame(ip);
+        if (success)
+        {
+            statusText.text = "Connected!";
+            EnterLobbyUI();
+            btnStartGame.gameObject.SetActive(false);
+        }
+        else
+        {
+            statusText.text = "Connection Failed.";
+        }
+    }
+
+    public void OnRoleClicked(string roleName)
+    {
+        PlayClickSound();
+        SimpleNetworkManager.Instance.myRole = roleName;
+        statusText.text = "You picked: " + roleName;
+    }
+
+    public void OnStartGameClicked()
+    {
+        PlayClickSound();
+        SimpleNetworkManager.Instance.SendMessageToServer("START_GAME");
+        LoadGameScene();
+    }
+
+    // --- NETWORK MESSAGES ---
+    public void OnMessageReceived(string msg)
+    {
+        Debug.Log("UI Received: " + msg);
+        if (msg == "START_GAME")
+        {
+            LoadGameScene();
+        }
+    }
+
+    void EnterLobbyUI()
+    {
+        hostJoinButtons.SetActive(false);
+        roleSelectionGroup.SetActive(true);
+    }
+
+    void LoadGameScene()
+    {
+        SceneManager.LoadScene(gameSceneName);
+    }
+
+    // --- OTHER MENUS ---
 
     public void OnHowToPlayClicked()
     {
         PlayClickSound();
-        Debug.Log("How to play clicked");
-        if (howToPlayPanel != null)
-            howToPlayPanel.SetActive(true);
+        if (howToPlayPanel != null) howToPlayPanel.SetActive(true);
     }
 
     public void OnSettingsClicked()
     {
         PlayClickSound();
-        Debug.Log("Settings clicked - Attempting to open panel");
-        if (settingsPanel != null)
-        {
-            settingsPanel.SetActive(true);
-            settingsPanel.transform.SetAsLastSibling(); // Ensure it's on top
-            Debug.Log($"Settings Panel opened: {settingsPanel.name}");
-        }
-        else
-        {
-            Debug.LogError("Settings Panel reference is MISSING in MainMenuManager!");
-        }
+        if (settingsPanel != null) settingsPanel.SetActive(true);
     }
 
     public void OnQuitClicked()
     {
         PlayClickSound();
-        Debug.Log("Quit clicked");
         Application.Quit();
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#endif
     }
-
-    // --- Panel Control ---
 
     public void CloseSettings()
     {
         PlayClickSound();
-        if (settingsPanel != null)
-            settingsPanel.SetActive(false);
+        if (settingsPanel != null) settingsPanel.SetActive(false);
+    }
+
+    public void CloseMultiplayer()
+    {
+        PlayClickSound();
+        // Closes the panel
+        if (multiplayerPanel != null) multiplayerPanel.SetActive(false);
     }
 
     public void CloseHowToPlay()
     {
         PlayClickSound();
-        if (howToPlayPanel != null)
-            howToPlayPanel.SetActive(false);
+        if (howToPlayPanel != null) howToPlayPanel.SetActive(false);
     }
-
-    // --- Settings Logic ---
 
     public void SetMasterVolume(float value)
     {
@@ -130,21 +193,8 @@ public class MainMenuManager : MonoBehaviour
         PlayerPrefs.Save();
     }
 
-    // --- Audio Helpers ---
-
     private void PlayClickSound()
     {
-        if (sfxSource != null && clickClip != null)
-        {
-            sfxSource.PlayOneShot(clickClip);
-        }
-    }
-
-    public void PlayHoverSound() // To be called via EventTrigger if desired
-    {
-        if (sfxSource != null && hoverClip != null)
-        {
-            sfxSource.PlayOneShot(hoverClip);
-        }
+        if (sfxSource != null && clickClip != null) sfxSource.PlayOneShot(clickClip);
     }
 }
