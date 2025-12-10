@@ -35,6 +35,23 @@ public class MainMenuManager : MonoBehaviour
             // Just load the volume if slider missing
             AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
         }
+
+        // Fallback: Find Settings Panel if missing
+        if (settingsPanel == null)
+        {
+            var settingsMenu = Object.FindFirstObjectByType<SettingsMenu>(FindObjectsInactive.Include);
+            if (settingsMenu != null)
+            {
+                settingsPanel = settingsMenu.gameObject;
+                Debug.Log("MainMenuManager found SettingsPanel dynamically.");
+            }
+            else
+            {
+                // Fallback by name
+                settingsPanel = GameObject.Find("SettingsPanel");
+                if (settingsPanel == null) settingsPanel = GameObject.Find("Settings Panel");
+            }
+        }
     }
 
     // --- Button Events ---
@@ -65,9 +82,17 @@ public class MainMenuManager : MonoBehaviour
     public void OnSettingsClicked()
     {
         PlayClickSound();
-        Debug.Log("Settings clicked");
+        Debug.Log("Settings clicked - Attempting to open panel");
         if (settingsPanel != null)
+        {
             settingsPanel.SetActive(true);
+            settingsPanel.transform.SetAsLastSibling(); // Ensure it's on top
+            Debug.Log($"Settings Panel opened: {settingsPanel.name}");
+        }
+        else
+        {
+            Debug.LogError("Settings Panel reference is MISSING in MainMenuManager!");
+        }
     }
 
     public void OnQuitClicked()
