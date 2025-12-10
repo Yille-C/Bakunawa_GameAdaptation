@@ -23,7 +23,10 @@ public class CardEffectManager : MonoBehaviour
         int totalAttack = 0;
         int enemyDebuff = 0;
 
-        // 1. SNAPSHOT: Remember old stats
+        // Safety Check
+        if (cardsPlayed == null || cardsPlayed.Count == 0) return result;
+
+        // 1. SNAPSHOT: Remember old stats to detect changes
         Dictionary<CardDisplay, int> oldAttacks = new Dictionary<CardDisplay, int>();
         foreach (CardUI card in cardsPlayed)
         {
@@ -32,6 +35,19 @@ public class CardEffectManager : MonoBehaviour
             {
                 oldAttacks[display] = display.lastFrameAttack;
                 display.ResetStats();
+            }
+        }
+
+        // Check Global Player Buffs (Alay) - Only apply if this is the PLAYER's team
+        if (!cardsPlayed[0].isEnemy)
+        {
+            if (HandManager.Instance != null && HandManager.Instance.alayBuffActive)
+            {
+                foreach (CardUI c in cardsPlayed) c.GetComponent<CardDisplay>().ModifyAttack(4);
+            }
+            if (HandManager.Instance != null && HandManager.Instance.alayDebuffActive)
+            {
+                enemyDebuff += 6;
             }
         }
 
@@ -47,9 +63,7 @@ public class CardEffectManager : MonoBehaviour
 
             switch (data.effectID)
             {
-                // ==========================
-                //      PLAYER CARDS
-                // ==========================
+                // PLAYER CARDS
                 case "atk_bayanihan":
                     int uniqueTypes = cardsPlayed.Select(c => c.GetComponent<CardDisplay>().cardData.type).Distinct().Count();
                     currentBuff = uniqueTypes * 2;
@@ -70,86 +84,40 @@ public class CardEffectManager : MonoBehaviour
                 case "def_kalasag": enemyDebuff += 2; break;
                 case "def_anito": enemyDebuff += 2; break;
                 case "sup_blessing": currentBuff = cardsPlayed.Count * 2; break;
-                case "sup_alay":
-                    foreach (CardUI c in cardsPlayed) c.GetComponent<CardDisplay>().ModifyAttack(4);
-                    break;
                 case "sup_kudyapi":
                     if (cardsPlayed.Count >= 3) currentBuff = cardsPlayed.Count;
                     break;
                 case "sup_elder": currentBuff = 2; break;
-
-                // ==========================
-                //      BAKUNAWA CARDS
-                // ==========================
-
-                // --- ATTACK ---
-                case "atk_lunar":
+                case "sup_gabayan":
+                    if (BakunawaAI.Instance != null) BakunawaAI.Instance.RevealLockedCards();
                     break;
 
+                // BAKUNAWA CARDS
+                case "atk_lunar": break; // Win condition only
                 case "atk_daluyon":
-                    int defenseCount = cardsPlayed.Count(c => c.GetComponent<CardDisplay>().cardData.type == CardType.Defense);
-                    currentBuff = defenseCount;
+                    currentBuff = cardsPlayed.Count(c => c.GetComponent<CardDisplay>().cardData.type == CardType.Defense);
                     break;
-
                 case "atk_deepsea":
-                    // Updated to use the public roundNumber from HandManager
-                    if (HandManager.Instance != null && HandManager.Instance.roundNumber > 5)
-                    {
-                        currentBuff = 2;
-                    }
+                    if (HandManager.Instance != null && HandManager.Instance.roundNumber > 5) currentBuff = 2;
                     break;
-
                 case "atk_serpent":
-                    if (enemyCards != null)
-                    {
-                        currentBuff = enemyCards.Count;
-                    }
+                    if (enemyCards != null) currentBuff = enemyCards.Count;
                     break;
-
-                case "atk_primal":
-                    break;
-
-                // --- DEFENSE ---
+                case "atk_primal": break;
                 case "def_eclipse": enemyDebuff += 4; break;
                 case "def_crushing": enemyDebuff += 3; break;
                 case "def_dragon": enemyDebuff += 1; break;
                 case "def_evasive": enemyDebuff += 2; break;
-
                 case "def_armored":
                     enemyDebuff += 2;
-                    if (enemyCards != null && enemyCards.Count > cardsPlayed.Count)
-                    {
-                        currentBuff = 1;
-                    }
+                    if (enemyCards != null && enemyCards.Count > cardsPlayed.Count) currentBuff = 1;
                     break;
-
-                // --- SUPPORT ---
                 case "sup_ancient":
-                    for (int j = i + 1; j < cardsPlayed.Count; j++)
-                    {
-                        cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2);
-                    }
+                    for (int j = i + 1; j < cardsPlayed.Count; j++) cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2);
                     break;
-
                 case "sup_ocean":
                     int buffCount = 0;
-                    for (int j = i + 1; j < cardsPlayed.Count; j++)
-                    {
-                        if (buffCount < 2)
-                        {
-                            cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2);
-                            buffCount++;
-                        }
-                    }
-                    break;
-
-                case "sup_predator":
-                    break;
-
-                case "sup_tidal":
-                    break;
-
-                case "sup_draconic":
+                    for (int j = i + 1; j < cardsPlayed.Count; j++) { if (buffCount < 2) { cardsPlayed[j].GetComponent<CardDisplay>().ModifyAttack(2); buffCount++; } }
                     break;
             }
 
@@ -184,15 +152,24 @@ public class CardEffectManager : MonoBehaviour
 
     string GetLabelForEffect(string id)
     {
-        if (id.Contains("bayanihan")) return "Unity";
+        // Player Labels
+        if (id.Contains("bayanihan")) return "Bayanihan";
         if (id.Contains("sandugo")) return "Tribesmen";
+        if (id.Contains("datu")) return "First Blood";
+        if (id.Contains("mayari")) return "Support";
+        if (id.Contains("blessing")) return "Blessing";
+        if (id.Contains("alay")) return "Offering";
+        if (id.Contains("kudyapi")) return "Rhythm";
+        if (id.Contains("elder")) return "Elder";
+
+        // Bakunawa Labels
         if (id.Contains("daluyon")) return "Wrath";
         if (id.Contains("deepsea")) return "Fury";
         if (id.Contains("serpent")) return "Strike";
         if (id.Contains("armored")) return "Scales";
         if (id.Contains("ancient")) return "Rage";
-        if (id.Contains("ocean")) return "Blessing";
+        if (id.Contains("ocean")) return "Tide";
 
-        return "Buff"; // Default
+        return "Buff"; // Default fallback
     }
 }

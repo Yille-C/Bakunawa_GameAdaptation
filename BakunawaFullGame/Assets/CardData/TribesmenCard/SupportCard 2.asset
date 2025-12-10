@@ -18,5 +18,6 @@ MonoBehaviour:
   energyCost: 3
   attackValue: 1
   cardArt: {fileID: -560541640, guid: 6868949ce58f9624f853e6ed0692eb6e, type: 3}
-  description: +4 Atk to ALL Played Card
+  description: 'Pick a Card effect: +4 Attack to all your cards OR Reduce Enemy Attack
+    by 6.'
   effectID: sup_alay

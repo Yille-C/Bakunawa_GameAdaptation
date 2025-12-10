@@ -18,5 +18,6 @@ MonoBehaviour:
   energyCost: 2
   attackValue: 4
   cardArt: {fileID: 242128520, guid: 4604423c6ac7a294294b67c7033217c2, type: 3}
-  description: Reduce Enemy Total Atk by 3.
+  description: Reduce Enemy Total Atk by 3. When The tribesmen lost the round, retrieve
+    the top card form discard pile.
   effectID: def_agong

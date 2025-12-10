@@ -40,15 +40,11 @@ public class BakunawaAI : MonoBehaviour
         foreach (CardData card in aiDeck)
         {
             GameObject newCard = Instantiate(cardPrefab, handArea);
-
-            // 1. Setup Visuals
             CardUI ui = newCard.GetComponent<CardUI>();
             ui.isEnemy = true;
             ui.Setup(card);
             ui.SwitchToDeckMode(true);
 
-            // 2. Setup Logic (ADDED THIS FIX)
-            // This ensures ScoreManager can read the enemy's attack!
             CardDisplay display = newCard.GetComponent<CardDisplay>();
             if (display != null)
             {
@@ -57,6 +53,22 @@ public class BakunawaAI : MonoBehaviour
             }
         }
     }
+
+    // --- NEW: REVEAL LOCKED CARDS (For Gabayan ng Ninuno) ---
+    public void RevealLockedCards()
+    {
+        foreach (Transform child in lockedArea)
+        {
+            CardUI card = child.GetComponent<CardUI>();
+            if (card != null)
+            {
+                // Flip face up
+                card.SwitchToDeckMode(false);
+                Debug.Log("Bakunawa locked card revealed!");
+            }
+        }
+    }
+    // --------------------------------------------------------
 
     public void LockInPlan()
     {
@@ -67,11 +79,10 @@ public class BakunawaAI : MonoBehaviour
             if (c != null) myHand.Add(c);
         }
 
-        // Strategy Randomizer
         int strategy = Random.Range(0, 3);
-        if (strategy == 0) myHand.Sort((a, b) => GetCardCost(b).CompareTo(GetCardCost(a))); // Tall
-        else if (strategy == 1) myHand.Sort((a, b) => GetCardCost(a).CompareTo(GetCardCost(b))); // Swarm
-        else ShuffleList(myHand); // Random
+        if (strategy == 0) myHand.Sort((a, b) => GetCardCost(b).CompareTo(GetCardCost(a)));
+        else if (strategy == 1) myHand.Sort((a, b) => GetCardCost(a).CompareTo(GetCardCost(b)));
+        else ShuffleList(myHand);
 
         int currentEnergy = 0;
         myLockedCards.Clear();
@@ -79,7 +90,6 @@ public class BakunawaAI : MonoBehaviour
         foreach (CardUI card in myHand)
         {
             int cost = GetCardCost(card);
-
             if (currentEnergy + cost <= maxEnergy)
             {
                 myLockedCards.Add(card);
@@ -143,7 +153,6 @@ public class BakunawaAI : MonoBehaviour
 
         if (deckPileArea.childCount == 0)
         {
-            Debug.Log("Bakunawa Deck Empty! Reshuffling...");
             List<CardUI> discarded = new List<CardUI>();
             foreach (Transform child in discardPile)
             {

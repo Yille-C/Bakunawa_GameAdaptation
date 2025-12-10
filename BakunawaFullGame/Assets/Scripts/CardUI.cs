@@ -5,8 +5,8 @@ using UnityEngine.EventSystems;
 public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
     [Header("UI References")]
-    public Image cardFrameImage;     // The White Background Image
-    public Image artworkImage;       // The Character Art
+    public Image cardFrameImage;
+    public Image artworkImage;
     public Text nameText;
     public Text costText;
     public Text attackText;
@@ -27,20 +27,22 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     private bool isPressed = false;
     private float pressTimer = 0f;
     private bool detailsShown = false;
-    private float holdTimeNeeded = 0.5f; // Time in seconds to hold before showing details
+    private float holdTimeNeeded = 0.5f;
+
+    // STATE FLAGS
+    private bool isLocked = false;
+    private bool isDeckMode = false; // Used to prevent clicking without disabling script
 
     public void Setup(CardData cardData)
     {
         data = cardData;
 
-        // Setup Texts
         if (nameText != null) nameText.text = data.cardName;
         if (costText != null) costText.text = data.energyCost.ToString();
         if (attackText != null) attackText.text = data.attackValue.ToString();
 
         if (data.cardArt != null && artworkImage != null) artworkImage.sprite = data.cardArt;
 
-        // Setup Locked Info Texts (Find the text components inside the objects)
         if (lockedCostObject != null)
         {
             Text txt = lockedCostObject.GetComponent<Text>();
@@ -52,28 +54,24 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             if (txt != null) txt.text = data.attackValue.ToString();
         }
 
-        // Reset States (Hide everything special)
         if (selectionBorder != null) selectionBorder.SetActive(false);
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
-        // Start with everything VISIBLE (Normal Card)
         SetVisualsVisible(true);
         if (cardFrameImage != null) cardFrameImage.color = Color.white;
+
+        // Ensure script is ON so we can detect holds
+        this.enabled = true;
     }
 
-    // --- MAIN FUNCTION: LOCKING ---
-    public void SetLockedState(bool isLocked)
+    public void SetLockedState(bool locked)
     {
-        // 1. Show the Black Star if locked
+        isLocked = locked;
         if (lockedArtObject != null) lockedArtObject.SetActive(isLocked);
-
-        // 2. Hide the White Frame/Text if locked
-        // If isLocked is TRUE -> SetVisualsVisible(FALSE) -> Hides Frame
         SetVisualsVisible(!isLocked);
     }
 
-    // Helper to toggle the main card parts (Frame, Art, Text)
     void SetVisualsVisible(bool isVisible)
     {
         if (cardFrameImage != null) cardFrameImage.enabled = isVisible;
@@ -85,23 +83,27 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     public void SwitchToDeckMode(bool showBack)
     {
+        isDeckMode = true;
+
         if (cardBackObject != null) cardBackObject.SetActive(showBack);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
-        // Ensure the frame is ON so the card exists physically in the pile
         SetVisualsVisible(true);
 
-        this.enabled = false; // Disable interactions
+        // CHANGED: We KEEP the script enabled so logic works, 
+        // but we block clicks using the 'isDeckMode' flag instead.
+        this.enabled = true;
     }
 
     public void ResetToHandMode()
     {
-        this.enabled = true; // Re-enable interactions
+        isDeckMode = false;
+        this.enabled = true;
+
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
         if (selectionBorder != null) selectionBorder.SetActive(false);
 
-        // Ensure everything is visible again for the hand
         SetVisualsVisible(true);
     }
 
@@ -119,17 +121,27 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
         if (detailsShown)
         {
+            // Close details if they were open
             if (HandManager.Instance != null) HandManager.Instance.HideCardDetails();
+            detailsShown = false;
+            return; // Don't process click logic
         }
-        else
+
+        // Only process click if it wasn't a long hold
+        if (pressTimer < holdTimeNeeded)
         {
             if (HandManager.Instance == null) return;
 
-            if (isEnemy) return; // Don't select enemy cards
+            // 1. Prevent clicking Enemy Cards
+            if (isEnemy) return;
 
+            // 2. Prevent clicking Deck/Pile Cards
+            if (isDeckMode) return;
+
+            // 3. Normal Logic
             if (HandManager.Instance.isPlanningPhase)
             {
-                if (selectionBorder != null)
+                if (!isLocked && selectionBorder != null)
                 {
                     HandManager.Instance.ToggleCardSelection(this, !selectionBorder.activeSelf);
                     selectionBorder.SetActive(!selectionBorder.activeSelf);
@@ -137,22 +149,28 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             }
             else
             {
-                HandManager.Instance.SelectCardForBattle(this);
+                if (isLocked)
+                {
+                    HandManager.Instance.SelectCardForBattle(this);
+                }
             }
         }
     }
 
     void Update()
     {
-        // Logic to detect "Holding Down" the click
+        // HOLD LOGIC
         if (isPressed && !detailsShown)
         {
             pressTimer += Time.deltaTime;
 
             if (pressTimer >= holdTimeNeeded)
             {
+                // SAFETY: Don't show details if card is Face Down (Cheating protection)
+                if (cardBackObject != null && cardBackObject.activeSelf) return;
+
                 detailsShown = true;
-                if (HandManager.Instance != null)
+                if (HandManager.Instance != null && data != null)
                 {
                     HandManager.Instance.ShowCardDetails(data);
                 }

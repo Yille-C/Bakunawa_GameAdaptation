@@ -1,11 +1,46 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Collections;
 
 public class HandManager : MonoBehaviour
 {
     public static HandManager Instance;
+
+    [Header("Game Over UI")]
+    public GameObject gameOverPanel;
+    public Image gameOverImage;
+    public Sprite victorySprite;
+    public Sprite defeatSprite;
+
+    [Header("Extra Game Over Icons")]
+    public Image extraIconDisplay;
+    public Sprite bakunawaIconSprite;
+    public Sprite tribesmenIconSprite;
+
+    public Text winnerText;
+    public Button restartButton;
+    public Button mainMenuButton;
+    private bool isGameOver = false;
+
+    [Header("Discard Notification UI")]
+    public GameObject discardNotifyPanel;
+    public Image discardNotifyImage;
+    public Text discardNotifyText;
+    public float discardNotifyDuration = 3.0f;
+
+    [Header("Agong Retrieval UI")]
+    public GameObject agongPanel;
+    public Image agongCardImage;
+    public Text agongCardName;
+    public float agongDuration = 3.0f;
+
+    [Header("Alay to Bathala Choice UI")]
+    public GameObject alayChoicePanel;
+    public Button alayBuffButton;
+    public Button alayDebuffButton;
+    private bool alayChoiceMade = false;
 
     [Header("Dice System")]
     public GameObject dicePanel;
@@ -66,6 +101,11 @@ public class HandManager : MonoBehaviour
     public GameObject detailsPanel;
     public Text detailName;
     public Text detailDesc;
+    // --- NEW DETAILS ---
+    public Image detailImage;
+    public Text detailCost;
+    public Text detailAttack;
+    // -------------------
 
     [Header("Data")]
     public List<CardData> myDeck;
@@ -78,10 +118,15 @@ public class HandManager : MonoBehaviour
     private CardUI currentBattleSelection;
 
     // GAME STATE
-    public int roundNumber = 1;        // CHANGED TO PUBLIC for card effects
+    public int roundNumber = 1;
     private bool playerGoesFirst = true;
     private bool enemyHasPlayedPendingCard = false;
     private CardUI pendingEnemyCard = null;
+
+    // FLAGS
+    public bool alayBuffActive = false;
+    public bool alayDebuffActive = false;
+    public bool agongPlayedThisRound = false;
 
     void Awake()
     {
@@ -98,6 +143,10 @@ public class HandManager : MonoBehaviour
         if (dicePanel != null) dicePanel.SetActive(false);
         if (turnChoicePanel != null) turnChoicePanel.SetActive(false);
         if (planningBanner != null) planningBanner.SetActive(false);
+        if (alayChoicePanel != null) alayChoicePanel.SetActive(false);
+        if (agongPanel != null) agongPanel.SetActive(false);
+        if (discardNotifyPanel != null) discardNotifyPanel.SetActive(false);
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
 
         // Button Listeners
         lockInButton.onClick.AddListener(OnLockInPressed);
@@ -107,10 +156,16 @@ public class HandManager : MonoBehaviour
         if (goFirstButton != null) goFirstButton.onClick.AddListener(() => FinalizeTurnOrder(true));
         if (goSecondButton != null) goSecondButton.onClick.AddListener(() => FinalizeTurnOrder(false));
 
+        if (alayBuffButton != null) alayBuffButton.onClick.AddListener(() => ResolveAlayChoice(true));
+        if (alayDebuffButton != null) alayDebuffButton.onClick.AddListener(() => ResolveAlayChoice(false));
+
+        if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
+        if (mainMenuButton != null) mainMenuButton.onClick.AddListener(GoToMainMenu);
+
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
 
-        roundNumber = 1; // Start at Round 1
+        roundNumber = 1;
         UpdateRoundUI();
 
         SpawnDeck();
@@ -119,6 +174,8 @@ public class HandManager : MonoBehaviour
 
     void Update()
     {
+        if (isGameOver) return;
+
         if (isPlanningPhase && !inputLocked)
         {
             currentTimer -= Time.deltaTime;
@@ -144,13 +201,303 @@ public class HandManager : MonoBehaviour
 
     void UpdateRoundUI()
     {
-        if (roundCounterText != null)
+        if (roundCounterText != null) roundCounterText.text = roundNumber.ToString();
+    }
+
+    // --- DETAILS PANEL LOGIC ---
+    public void ShowCardDetails(CardData data)
+    {
+        detailsPanel.SetActive(true);
+        if (detailName != null) detailName.text = data.cardName;
+        if (detailDesc != null) detailDesc.text = data.description;
+
+        if (detailImage != null && data.cardArt != null) detailImage.sprite = data.cardArt;
+        if (detailCost != null) detailCost.text = data.energyCost.ToString();
+        if (detailAttack != null) detailAttack.text = data.attackValue.ToString();
+    }
+
+    public void HideCardDetails()
+    {
+        detailsPanel.SetActive(false);
+    }
+    // ---------------------------
+
+    // --- GAME OVER LOGIC ---
+    public void TriggerGameOver(string winner)
+    {
+        if (isGameOver) return;
+        isGameOver = true;
+
+        if (gameOverPanel != null)
         {
-            roundCounterText.text = roundNumber.ToString();
+            gameOverPanel.SetActive(true);
+            if (winnerText != null)
+            {
+                winnerText.text = winner == "Tribesmen" ? "VICTORY" : "DEFEAT";
+                winnerText.color = winner == "Tribesmen" ? new Color(0f, 1f, 1f) : Color.red;
+            }
+            if (gameOverImage != null)
+            {
+                gameOverImage.color = Color.white;
+                if (winner == "Tribesmen" && victorySprite != null) gameOverImage.sprite = victorySprite;
+                else if (defeatSprite != null) gameOverImage.sprite = defeatSprite;
+            }
+            if (extraIconDisplay != null)
+            {
+                extraIconDisplay.gameObject.SetActive(true);
+                if (winner == "Tribesmen")
+                {
+                    if (tribesmenIconSprite != null) extraIconDisplay.sprite = tribesmenIconSprite;
+                    else extraIconDisplay.gameObject.SetActive(false);
+                }
+                else
+                {
+                    if (bakunawaIconSprite != null) extraIconDisplay.sprite = bakunawaIconSprite;
+                    else extraIconDisplay.gameObject.SetActive(false);
+                }
+            }
         }
     }
 
-    // --- CINEMATIC ROUND START ---
+    void RestartGame()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    void GoToMainMenu()
+    {
+        SceneManager.LoadScene("MainMenu");
+    }
+
+    // --- ALAY CHOICE LOGIC ---
+    IEnumerator ShowAlayChoice()
+    {
+        if (alayChoicePanel != null)
+        {
+            alayChoicePanel.SetActive(true);
+            alayChoiceMade = false;
+            while (!alayChoiceMade) { yield return null; }
+            alayChoicePanel.SetActive(false);
+        }
+    }
+
+    void ResolveAlayChoice(bool isBuff)
+    {
+        if (isBuff) { alayBuffActive = true; alayDebuffActive = false; }
+        else { alayBuffActive = false; alayDebuffActive = true; }
+        alayChoiceMade = true;
+    }
+
+    public void SelectCardForBattle(CardUI card)
+    {
+        if (inputLocked || (playCardButton != null && !playCardButton.interactable)) return;
+
+        if (currentBattleSelection != null)
+        {
+            if (currentBattleSelection.selectionBorder != null)
+                currentBattleSelection.selectionBorder.SetActive(false);
+        }
+        currentBattleSelection = card;
+        if (currentBattleSelection.selectionBorder != null)
+        {
+            currentBattleSelection.selectionBorder.SetActive(true);
+        }
+    }
+
+    void OnPlayButtonPressed()
+    {
+        if (currentBattleSelection == null) return;
+        StartCoroutine(PlayPlayerCardSequence(currentBattleSelection));
+    }
+
+    IEnumerator PlayPlayerCardSequence(CardUI cardToPlay)
+    {
+        playCardButton.interactable = false;
+
+        CardDisplay display = cardToPlay.GetComponent<CardDisplay>();
+        if (display != null && display.cardData != null && display.cardData.effectID == "sup_alay")
+        {
+            yield return StartCoroutine(ShowAlayChoice());
+        }
+
+        if (display != null && display.cardData != null && display.cardData.effectID == "def_agong")
+        {
+            agongPlayedThisRound = true;
+        }
+
+        cardToPlay.transform.SetParent(battleZone);
+        cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        cardToPlay.transform.localRotation = Quaternion.identity;
+        cardToPlay.SetLockedState(false);
+        cardToPlay.selectionBorder.SetActive(false);
+
+        RecalculateBattleEffects();
+
+        currentBattleSelection = null;
+
+        if (playerGoesFirst)
+        {
+            StartCoroutine(BakunawaResponseSequence(cardToPlay));
+        }
+        else
+        {
+            if (enemyHasPlayedPendingCard && pendingEnemyCard != null)
+            {
+                StartCoroutine(ResolveImmediateClash(cardToPlay, pendingEnemyCard));
+            }
+            else
+            {
+                StartCoroutine(ResolveImmediateClash(cardToPlay, null));
+            }
+        }
+    }
+
+    IEnumerator DiscardPlayerCardSequence(string sourceEffectName)
+    {
+        Transform target = null;
+        if (deckPileArea.childCount > 0) target = deckPileArea.GetChild(0);
+        else if (handArea.childCount > 0) target = handArea.GetChild(0);
+
+        if (target != null)
+        {
+            CardUI cardUI = target.GetComponent<CardUI>();
+            CardDisplay display = target.GetComponent<CardDisplay>();
+
+            if (discardNotifyPanel != null && display != null)
+            {
+                discardNotifyPanel.SetActive(true);
+                if (discardNotifyImage != null) discardNotifyImage.sprite = display.cardData.cardArt;
+                if (discardNotifyText != null) discardNotifyText.text = sourceEffectName + " forced you to discard:\n" + display.cardData.cardName;
+
+                CanvasGroup group = discardNotifyPanel.GetComponent<CanvasGroup>();
+                if (group != null) { group.alpha = 0; while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } }
+                yield return new WaitForSeconds(discardNotifyDuration);
+                if (group != null) { while (group.alpha > 0) { group.alpha -= Time.deltaTime * 3f; yield return null; } }
+                discardNotifyPanel.SetActive(false);
+            }
+            MoveToPile(cardUI, discardPileArea, true);
+        }
+    }
+
+    IEnumerator ShowAgongRetrieval()
+    {
+        if (discardPileArea.childCount > 0)
+        {
+            Transform recoveredCardObj = discardPileArea.GetChild(discardPileArea.childCount - 1);
+            CardUI recoveredCardUI = recoveredCardObj.GetComponent<CardUI>();
+            CardDisplay recoveredData = recoveredCardObj.GetComponent<CardDisplay>();
+
+            if (recoveredCardUI != null && recoveredData != null)
+            {
+                if (agongCardImage != null) agongCardImage.sprite = recoveredData.cardData.cardArt;
+                if (agongCardName != null) agongCardName.text = recoveredData.cardData.cardName;
+
+                if (agongPanel != null)
+                {
+                    agongPanel.SetActive(true);
+                    CanvasGroup group = agongPanel.GetComponent<CanvasGroup>();
+                    if (group != null) { group.alpha = 0; while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } }
+                    yield return new WaitForSeconds(agongDuration);
+                    if (group != null) { while (group.alpha > 0) { group.alpha -= Time.deltaTime * 3f; yield return null; } }
+                    agongPanel.SetActive(false);
+                }
+                ReturnCardToHand(recoveredCardUI);
+            }
+        }
+    }
+
+    IEnumerator EndRoundSequence()
+    {
+        int pScore = 0;
+        int bScore = 0;
+        bool playerLost = false;
+        bool bakunawaWon = false;
+
+        if (ScoreManager.Instance != null)
+        {
+            pScore = ScoreManager.Instance.playerTotal;
+            bScore = ScoreManager.Instance.bakunawaTotal;
+            ScoreManager.Instance.ResolveRound();
+            if (bScore > pScore) { playerLost = true; bakunawaWon = true; }
+        }
+
+        yield return StartCoroutine(ShowResultBanner(pScore, bScore));
+
+        if (playerLost && agongPlayedThisRound)
+        {
+            yield return StartCoroutine(ShowAgongRetrieval());
+        }
+
+        if (bakunawaWon)
+        {
+            bool lunarActive = false;
+            bool tidalActive = false;
+            int bakunawaCardCount = 0;
+
+            foreach (Transform t in battleZone)
+            {
+                CardUI c = t.GetComponent<CardUI>();
+                if (c != null && c.isEnemy)
+                {
+                    bakunawaCardCount++;
+                    CardDisplay d = c.GetComponent<CardDisplay>();
+                    if (d != null && d.cardData != null)
+                    {
+                        if (d.cardData.effectID == "atk_lunar") lunarActive = true;
+                        if (d.cardData.effectID == "sup_tidal") tidalActive = true;
+                    }
+                }
+            }
+
+            if (lunarActive && bakunawaCardCount == 1)
+            {
+                if (ScoreManager.Instance != null) ScoreManager.Instance.UpdateTowerScore(1);
+            }
+
+            if (tidalActive)
+            {
+                yield return StartCoroutine(DiscardPlayerCardSequence("Tidal Pull"));
+            }
+        }
+
+        int bakuRuntimeCount = 0;
+        if (BakunawaAI.Instance != null)
+        {
+            bakuRuntimeCount += BakunawaAI.Instance.deckPileArea.childCount;
+            bakuRuntimeCount += BakunawaAI.Instance.handArea.childCount;
+        }
+
+        if (bakuRuntimeCount <= 5)
+        {
+            bool draconicPlayed = false;
+            foreach (Transform t in battleZone)
+            {
+                CardUI c = t.GetComponent<CardUI>();
+                if (c != null && c.isEnemy)
+                {
+                    CardDisplay d = c.GetComponent<CardDisplay>();
+                    if (d != null && d.cardData != null && d.cardData.effectID == "sup_draconic")
+                        draconicPlayed = true;
+                }
+            }
+
+            if (draconicPlayed)
+            {
+                yield return StartCoroutine(DiscardPlayerCardSequence("Draconic Patience"));
+            }
+        }
+
+        yield return new WaitForSeconds(1.0f);
+
+        List<CardUI> playedCards = new List<CardUI>();
+        foreach (Transform child in battleZone) { CardUI card = child.GetComponent<CardUI>(); if (card != null) playedCards.Add(card); }
+        foreach (CardUI card in playedCards) MoveToPile(card, discardPileArea, true);
+        if (BakunawaAI.Instance != null) BakunawaAI.Instance.CleanupRound();
+
+        yield return new WaitForSeconds(1.0f);
+        StartNextRound();
+    }
+
     IEnumerator StartPlanningPhaseSequence()
     {
         inputLocked = true;
@@ -158,11 +505,14 @@ public class HandManager : MonoBehaviour
         currentTimer = planningTime;
         SetEnergyUIActive(false);
 
+        alayBuffActive = false;
+        alayDebuffActive = false;
+        agongPlayedThisRound = false;
+
         if (planningBanner != null)
         {
             planningBanner.SetActive(true);
             CanvasGroup group = planningBanner.GetComponent<CanvasGroup>();
-
             if (group != null) { group.alpha = 0; while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } }
 
             if (planningBannerText != null)
@@ -197,7 +547,6 @@ public class HandManager : MonoBehaviour
         while (t > 0) { t -= Time.deltaTime * 3f; textObj.color = new Color(c.r, c.g, c.b, t); yield return null; }
     }
 
-    // --- LOCK IN ---
     void OnLockInPressed()
     {
         if (inputLocked) return;
@@ -220,6 +569,10 @@ public class HandManager : MonoBehaviour
 
         foreach (CardUI card in selectedCardsUI)
         {
+            CardDisplay display = card.GetComponent<CardDisplay>();
+            if (display != null && display.cardData != null && display.cardData.effectID == "def_agong")
+                agongPlayedThisRound = true;
+
             card.transform.SetParent(lockedHandArea);
             card.selectionBorder.SetActive(false);
             card.SetLockedState(true);
@@ -245,7 +598,6 @@ public class HandManager : MonoBehaviour
         StartDicePhase();
     }
 
-    // --- DICE SYSTEM ---
     void StartDicePhase()
     {
         if (dicePanel != null)
@@ -330,7 +682,6 @@ public class HandManager : MonoBehaviour
         StartCoroutine(CombatBannerSequence());
     }
 
-    // --- BATTLE SEQUENCE ---
     IEnumerator CombatBannerSequence()
     {
         if (combatBanner != null)
@@ -400,54 +751,6 @@ public class HandManager : MonoBehaviour
         else
         {
             playCardButton.interactable = true;
-        }
-    }
-
-    public void SelectCardForBattle(CardUI card)
-    {
-        if (inputLocked || (playCardButton.interactable == false)) return;
-
-        if (currentBattleSelection != null)
-        {
-            currentBattleSelection.selectionBorder.SetActive(false);
-        }
-        currentBattleSelection = card;
-        if (currentBattleSelection.selectionBorder != null)
-        {
-            currentBattleSelection.selectionBorder.SetActive(true);
-        }
-    }
-
-    void OnPlayButtonPressed()
-    {
-        if (currentBattleSelection == null) return;
-
-        currentBattleSelection.transform.SetParent(battleZone);
-        currentBattleSelection.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
-        currentBattleSelection.transform.localRotation = Quaternion.identity;
-        currentBattleSelection.SetLockedState(false);
-        currentBattleSelection.selectionBorder.SetActive(false);
-
-        RecalculateBattleEffects();
-
-        CardUI playerCard = currentBattleSelection;
-        currentBattleSelection = null;
-        playCardButton.interactable = false;
-
-        if (playerGoesFirst)
-        {
-            StartCoroutine(BakunawaResponseSequence(playerCard));
-        }
-        else
-        {
-            if (enemyHasPlayedPendingCard && pendingEnemyCard != null)
-            {
-                StartCoroutine(ResolveImmediateClash(playerCard, pendingEnemyCard));
-            }
-            else
-            {
-                StartCoroutine(ResolveImmediateClash(playerCard, null));
-            }
         }
     }
 
@@ -538,29 +841,6 @@ public class HandManager : MonoBehaviour
         StartCoroutine(EndRoundSequence());
     }
 
-    IEnumerator EndRoundSequence()
-    {
-        int pScore = 0;
-        int bScore = 0;
-        if (ScoreManager.Instance != null)
-        {
-            pScore = ScoreManager.Instance.playerTotal;
-            bScore = ScoreManager.Instance.bakunawaTotal;
-            ScoreManager.Instance.ResolveRound();
-        }
-
-        yield return StartCoroutine(ShowResultBanner(pScore, bScore));
-        yield return new WaitForSeconds(1.0f);
-
-        List<CardUI> playedCards = new List<CardUI>();
-        foreach (Transform child in battleZone) { CardUI card = child.GetComponent<CardUI>(); if (card != null) playedCards.Add(card); }
-        foreach (CardUI card in playedCards) MoveToPile(card, discardPileArea, true);
-        if (BakunawaAI.Instance != null) BakunawaAI.Instance.CleanupRound();
-
-        yield return new WaitForSeconds(1.0f);
-        StartNextRound();
-    }
-
     IEnumerator ShowResultBanner(int pScore, int bScore)
     {
         if (resultBannerObject != null)
@@ -596,16 +876,50 @@ public class HandManager : MonoBehaviour
     void RecalculateBattleEffects()
     {
         if (CardEffectManager.Instance == null) return;
-        List<CardUI> playedCards = new List<CardUI>();
-        foreach (Transform t in battleZone) { CardUI c = t.GetComponent<CardUI>(); if (c != null) playedCards.Add(c); }
-        List<CardUI> enemyCards = new List<CardUI>();
-        if (BakunawaAI.Instance != null && BakunawaAI.Instance.battleZone != null) { foreach (Transform t in BakunawaAI.Instance.battleZone) { CardUI c = t.GetComponent<CardUI>(); if (c != null) enemyCards.Add(c); } }
-        var result = CardEffectManager.Instance.CalculateRoundStats(playedCards, enemyCards);
-        if (ScoreManager.Instance != null) ScoreManager.Instance.enemyDebuffValue = result.damageReductionToEnemy;
+
+        List<CardUI> playerBattleCards = new List<CardUI>();
+        List<CardUI> enemyBattleCards = new List<CardUI>();
+
+        foreach (Transform t in battleZone)
+        {
+            CardUI c = t.GetComponent<CardUI>();
+            if (c != null)
+            {
+                if (c.isEnemy) enemyBattleCards.Add(c);
+                else playerBattleCards.Add(c);
+            }
+        }
+        if (BakunawaAI.Instance != null && BakunawaAI.Instance.battleZone != null && BakunawaAI.Instance.battleZone != battleZone)
+        {
+            foreach (Transform t in BakunawaAI.Instance.battleZone)
+            {
+                CardUI c = t.GetComponent<CardUI>();
+                if (c != null)
+                {
+                    if (c.isEnemy) enemyBattleCards.Add(c);
+                    else playerBattleCards.Add(c);
+                }
+            }
+        }
+
+        var playerResult = CardEffectManager.Instance.CalculateRoundStats(playerBattleCards, enemyBattleCards);
+        var enemyResult = CardEffectManager.Instance.CalculateRoundStats(enemyBattleCards, playerBattleCards);
+
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.enemyDebuffValue = playerResult.damageReductionToEnemy;
+            ScoreManager.Instance.playerDebuffValue = enemyResult.damageReductionToEnemy;
+        }
     }
 
     void StartNextRound()
     {
+        if (roundNumber >= 10)
+        {
+            CheckFinalScoreWin();
+            return;
+        }
+
         if (deckPileArea.childCount > 0) { List<CardUI> unusedCards = new List<CardUI>(); foreach (Transform child in deckPileArea) { CardUI card = child.GetComponent<CardUI>(); if (card != null) unusedCards.Add(card); } foreach (CardUI card in unusedCards) ReturnCardToHand(card); }
         else { List<CardUI> discardedCards = new List<CardUI>(); foreach (Transform child in discardPileArea) { CardUI card = child.GetComponent<CardUI>(); if (card != null) discardedCards.Add(card); } ShuffleList(discardedCards); foreach (CardUI card in discardedCards) ReturnCardToHand(card); }
 
@@ -618,19 +932,30 @@ public class HandManager : MonoBehaviour
         selectedCardsUI.Clear();
         SetEnergyUIActive(true);
         UpdateEnergyUI();
-        if (ScoreManager.Instance != null) ScoreManager.Instance.enemyDebuffValue = 0;
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.enemyDebuffValue = 0;
+            ScoreManager.Instance.playerDebuffValue = 0;
+        }
 
         roundNumber++;
         UpdateRoundUI();
         StartCoroutine(StartPlanningPhaseSequence());
     }
 
+    void CheckFinalScoreWin()
+    {
+        if (ScoreManager.Instance == null) return;
+        int score = ScoreManager.Instance.currentTowerScore;
+
+        if (score > 0) TriggerGameOver("Bakunawa");
+        else if (score < 0) TriggerGameOver("Tribesmen");
+        else TriggerGameOver("Draw");
+    }
+
     void ReturnCardToHand(CardUI card) { card.transform.SetParent(handArea); card.transform.localRotation = Quaternion.identity; card.transform.localScale = Vector3.one; card.ResetToHandMode(); }
     void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
-    public void ShowCardDetails(CardData data) { detailsPanel.SetActive(true); detailName.text = data.cardName; detailDesc.text = data.description; }
-    public void HideCardDetails() { detailsPanel.SetActive(false); }
-
     void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
     void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
     public bool ToggleCardSelection(CardUI cardUI, bool isSelected) { if (!isPlanningPhase) return false; if (isSelected) selectedCardsUI.Add(cardUI); else selectedCardsUI.Remove(cardUI); UpdateEnergyUI(); return true; }

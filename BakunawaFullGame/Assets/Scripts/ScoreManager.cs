@@ -13,6 +13,11 @@ public class ScoreManager : MonoBehaviour
     public Text playerScoreText;
     public Text bakunawaScoreText;
 
+    [Header("Popup System")]
+    public GameObject popupPrefab;
+    public Transform playerPopupSpot;
+    public Transform bakunawaPopupSpot;
+
     [Header("Zones")]
     public Transform playerZone;
     public Transform bakunawaZone;
@@ -20,8 +25,11 @@ public class ScoreManager : MonoBehaviour
     public int playerTotal;
     public int bakunawaTotal;
 
-    // NEW: Stores the total reduction from Player's Defense cards
     public int enemyDebuffValue = 0;
+    public int playerDebuffValue = 0;
+
+    private int lastEnemyDebuff = 0;
+    private int lastPlayerDebuff = 0;
 
     void Awake()
     {
@@ -39,12 +47,45 @@ public class ScoreManager : MonoBehaviour
             towerSlider.value = 0;
         }
         currentTowerScore = 0;
-        enemyDebuffValue = 0; // Reset
+        enemyDebuffValue = 0;
+        playerDebuffValue = 0;
+        lastEnemyDebuff = 0;
+        lastPlayerDebuff = 0;
     }
 
     void Update()
     {
         CalculateBoardTotals();
+        CheckForDebuffPopups();
+    }
+
+    void CheckForDebuffPopups()
+    {
+        if (playerDebuffValue > lastPlayerDebuff)
+        {
+            int diff = playerDebuffValue - lastPlayerDebuff;
+            Debug.Log($"Player Debuffed! Spawning popup for -{diff}");
+            CreatePopup(playerPopupSpot, -diff, "Atk");
+        }
+        lastPlayerDebuff = playerDebuffValue;
+
+        if (enemyDebuffValue > lastEnemyDebuff)
+        {
+            int diff = enemyDebuffValue - lastEnemyDebuff;
+            Debug.Log($"Bakunawa Debuffed! Spawning popup for -{diff}");
+            CreatePopup(bakunawaPopupSpot, -diff, "Atk");
+        }
+        lastEnemyDebuff = enemyDebuffValue;
+    }
+
+    void CreatePopup(Transform spot, int amount, string label)
+    {
+        if (popupPrefab != null && spot != null)
+        {
+            GameObject popup = Instantiate(popupPrefab, spot.position, Quaternion.identity, spot);
+            DamagePopup dp = popup.GetComponent<DamagePopup>();
+            if (dp != null) dp.Setup(amount, label);
+        }
     }
 
     public void ResolveClash(int pAtk, int eAtk)
@@ -60,7 +101,7 @@ public class ScoreManager : MonoBehaviour
         else if (bakunawaTotal > playerTotal) UpdateTowerScore(1);
     }
 
-    void UpdateTowerScore(int change)
+    public void UpdateTowerScore(int change)
     {
         int previousScore = currentTowerScore;
         int nextScore = currentTowerScore + change;
@@ -73,19 +114,30 @@ public class ScoreManager : MonoBehaviour
 
         currentTowerScore = Mathf.Clamp(nextScore, -5, 5);
         if (towerSlider != null) towerSlider.value = currentTowerScore;
+
+        // --- NEW: INSTANT WIN CHECK ---
+        if (currentTowerScore <= -5)
+        {
+            if (HandManager.Instance != null) HandManager.Instance.TriggerGameOver("Tribesmen");
+        }
+        else if (currentTowerScore >= 5)
+        {
+            if (HandManager.Instance != null) HandManager.Instance.TriggerGameOver("Bakunawa");
+        }
+        // ------------------------------
     }
 
     void CalculateBoardTotals()
     {
-        playerTotal = 0;
-        bakunawaTotal = 0;
+        int tempPlayerTotal = 0;
+        int tempBakunawaTotal = 0;
 
         if (playerZone != null)
         {
             foreach (Transform card in playerZone)
             {
                 CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null) playerTotal += display.currentAttack;
+                if (display != null) tempPlayerTotal += display.currentAttack;
             }
         }
 
@@ -94,15 +146,15 @@ public class ScoreManager : MonoBehaviour
             foreach (Transform card in bakunawaZone)
             {
                 CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null) bakunawaTotal += display.currentAttack;
+                if (display != null) tempBakunawaTotal += display.currentAttack;
             }
         }
 
-        // --- APPLY DEBUFFS HERE ---
-        // Subtract the Defense Card effects from Bakunawa's total
-        bakunawaTotal -= enemyDebuffValue;
-        // Prevent negative score (optional)
-        if (bakunawaTotal < 0) bakunawaTotal = 0;
+        tempPlayerTotal -= playerDebuffValue;
+        tempBakunawaTotal -= enemyDebuffValue;
+
+        playerTotal = Mathf.Max(0, tempPlayerTotal);
+        bakunawaTotal = Mathf.Max(0, tempBakunawaTotal);
 
         if (playerScoreText != null) playerScoreText.text = playerTotal.ToString();
         if (bakunawaScoreText != null) bakunawaScoreText.text = bakunawaTotal.ToString();
