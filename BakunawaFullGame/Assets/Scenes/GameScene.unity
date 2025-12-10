@@ -493,27 +493,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90235f66fff0c3843b5d690573fcc310, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HandManager
+  cardsPerHand: 5
+  spawnEntireDatabase: 1
+  playCardScale: 0.7
+  discardScale: 0.6
+  planningTime: 60
   gameOverPanel: {fileID: 1895941105}
-  gameOverImage: {fileID: 1895941107}
-  victorySprite: {fileID: -1998809483, guid: 30f6216c357eee745a172c67e6c68438, type: 3}
-  defeatSprite: {fileID: 753518152, guid: 8ae801aff3abfb242b182cbac57206fa, type: 3}
-  extraIconDisplay: {fileID: 1633070473}
-  bakunawaIconSprite: {fileID: 1598469041, guid: cb580b5d8d2a7a74da271df68dfcf33a, type: 3}
-  tribesmenIconSprite: {fileID: 1365844, guid: a00693ce63f7c474aa2e47507e0a8488, type: 3}
   winnerText: {fileID: 1765691778}
   restartButton: {fileID: 587159467}
   mainMenuButton: {fileID: 620840879}
-  discardNotifyPanel: {fileID: 140083888}
-  discardNotifyImage: {fileID: 2127818746}
-  discardNotifyText: {fileID: 897582327}
-  discardNotifyDuration: 3
-  agongPanel: {fileID: 949439531}
-  agongCardImage: {fileID: 1396034242}
-  agongCardName: {fileID: 1556830215}
-  agongDuration: 3
-  alayChoicePanel: {fileID: 1090848575}
-  alayBuffButton: {fileID: 669488271}
-  alayDebuffButton: {fileID: 1288867087}
+  timerText: {fileID: 1893149603}
+  roundCounterText: {fileID: 1225149217}
+  lockInButton: {fileID: 918214459}
+  playCardButton: {fileID: 1256848331}
+  cardPrefab: {fileID: 8458815608511427349, guid: 0294fc85874082747bee2512434a058b, type: 3}
+  handArea: {fileID: 1590190052}
+  lockedHandArea: {fileID: 1182479339}
+  deckPileArea: {fileID: 211859487}
+  battleZone: {fileID: 1013582157}
+  discardPileArea: {fileID: 1788652074}
   dicePanel: {fileID: 1024008322}
   playerDiceImg: {fileID: 614828328}
   enemyDiceImg: {fileID: 1555230627}
@@ -528,42 +526,23 @@ MonoBehaviour:
   turnChoicePanel: {fileID: 66988033}
   goFirstButton: {fileID: 1917681234}
   goSecondButton: {fileID: 1329366233}
-  resultBannerObject: {fileID: 1772657970}
-  bannerDisplayImage: {fileID: 1772657971}
-  tribesmenWinSprite: {fileID: 1291236797, guid: e49658d20ba0eb04a951766a20452bd3, type: 3}
-  bakunawaWinSprite: {fileID: -736627776, guid: 098b408f221b7cd459efc05fa536f084, type: 3}
-  fallbackText: {fileID: 0}
-  resultDuration: 3
+  combatBanner: {fileID: 1091561048}
+  combatBannerText: {fileID: 1344548126}
   planningBanner: {fileID: 1058286963}
   planningBannerText: {fileID: 613298125}
   planningBannerDuration: 3
-  roundCounterText: {fileID: 1225149217}
-  combatBanner: {fileID: 1091561048}
-  combatBannerText: {fileID: 1344548126}
-  bannerDuration: 5
   energySlider: {fileID: 704941214}
   energyText: {fileID: 499259052}
   warningText: {fileID: 1689861727}
   maxEnergy: 10
-  cardPrefab: {fileID: 8458815608511427349, guid: 0294fc85874082747bee2512434a058b, type: 3}
-  handArea: {fileID: 1590190052}
-  lockedHandArea: {fileID: 1182479339}
-  deckPileArea: {fileID: 211859487}
-  battleZone: {fileID: 1013582157}
-  discardPileArea: {fileID: 1788652074}
-  lockInButton: {fileID: 918214459}
-  playCardButton: {fileID: 1256848331}
-  timerText: {fileID: 1893149603}
-  playCardScale: 0.7
-  discardScale: 0.6
-  planningTime: 61
+  currentEnergy: 10
   detailsPanel: {fileID: 247874080}
   detailName: {fileID: 1937611407}
   detailDesc: {fileID: 1691521361}
   detailImage: {fileID: 669221789}
   detailCost: {fileID: 1406302966}
   detailAttack: {fileID: 833798611}
-  myDeck:
+  allCardsDatabase:
   - {fileID: 11400000, guid: 50423b0edd3272b4783b659ff96efcf4, type: 2}
   - {fileID: 11400000, guid: a9f167d05d83b6e4d8473692c25c247b, type: 2}
   - {fileID: 11400000, guid: 4c1bf6386bea1524291b21ea325e7fb9, type: 2}
@@ -579,11 +558,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ea96ba166a5f0ad44b2810ffd5d5f43b, type: 2}
   - {fileID: 11400000, guid: a6dee8233c7d8c344a6663e7e8e647f6, type: 2}
   - {fileID: 11400000, guid: 0e487bffb022b6d47bd322327b0861e2, type: 2}
-  isPlanningPhase: 1
-  roundNumber: 1
   alayBuffActive: 0
   alayDebuffActive: 0
   agongPlayedThisRound: 0
+  isGameOver: 0
+  isPlanningPhase: 1
+  roundNumber: 1
+  playerGoesFirst: 1
 --- !u!114 &163578463
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -661,9 +642,9 @@ RectTransform:
   m_Children:
   - {fileID: 2008359678}
   - {fileID: 211859487}
-  - {fileID: 1590190052}
   - {fileID: 1788652074}
   - {fileID: 1182479339}
+  - {fileID: 1590190052}
   - {fileID: 1013582157}
   - {fileID: 972979581}
   - {fileID: 746696303}
@@ -6009,8 +5990,6 @@ MonoBehaviour:
   handArea: {fileID: 972979581}
   lockedArea: {fileID: 746696303}
   deckPileArea: {fileID: 1434075552}
-  battleZone: {fileID: 224339359}
-  discardPile: {fileID: 248257003}
   aiDeck:
   - {fileID: 11400000, guid: 60a62a8baca265541abd9241bcc538e3, type: 2}
   - {fileID: 11400000, guid: 3ecbeaef656fd3948996ef2ae6de4fc9, type: 2}
@@ -6027,9 +6006,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7ff84c7e161c58240b37677482531da6, type: 2}
   - {fileID: 11400000, guid: 216edaf56ad44fd41843eed7197ecce3, type: 2}
   - {fileID: 11400000, guid: 3a00e19d89497bd4ea0bd8271461a03f, type: 2}
-  maxEnergy: 10
-  playCardScale: 0.7
-  discardScale: 0.6
 --- !u!4 &1460871394
 Transform:
   m_ObjectHideFlags: 0

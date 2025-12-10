@@ -22,52 +22,40 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 
     [Header("Settings")]
     public bool isEnemy = false;
-
-    // CHANGED TO PUBLIC TO FIX HANDMANAGER ERROR
     public CardData cardData;
 
     private bool isPressed = false;
     private float pressTimer = 0f;
     private bool detailsShown = false;
     private float holdTimeNeeded = 0.5f;
-
     private bool isDeckMode = false;
 
     public void Setup(CardData data)
     {
         cardData = data;
+        if (nameText != null) nameText.text = data.cardName;
+        if (costText != null) costText.text = data.energyCost.ToString();
+        if (attackText != null) attackText.text = data.attackValue.ToString();
+        if (data.cardArt != null && artworkImage != null) artworkImage.sprite = data.cardArt;
 
-        if (nameText != null) nameText.text = cardData.cardName;
-        if (costText != null) costText.text = cardData.energyCost.ToString();
-        if (attackText != null) attackText.text = cardData.attackValue.ToString();
-
-        if (cardData.cardArt != null && artworkImage != null) artworkImage.sprite = cardData.cardArt;
-
-        if (lockedCostObject != null)
-        {
-            Text txt = lockedCostObject.GetComponent<Text>();
-            if (txt != null) txt.text = cardData.energyCost.ToString();
-        }
-        if (lockedAttackObject != null)
-        {
-            Text txt = lockedAttackObject.GetComponent<Text>();
-            if (txt != null) txt.text = cardData.attackValue.ToString();
-        }
+        // Setup Locked Visuals
+        if (lockedCostObject != null) lockedCostObject.text = data.energyCost.ToString();
+        if (lockedAttackObject != null) lockedAttackObject.text = data.attackValue.ToString();
 
         if (selectionBorder != null) selectionBorder.SetActive(false);
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
         SetVisualsVisible(true);
-        if (cardFrameImage != null) cardFrameImage.color = Color.white;
-
-        this.enabled = true;
+        this.enabled = true; // Ensure script is on
         isDeckMode = false;
     }
 
     public void SetLockedState(bool locked)
     {
         if (lockedArtObject != null) lockedArtObject.SetActive(locked);
+        // We do NOT disable the script here anymore
+        // Visuals can be toggled if you have separate 'locked' vs 'unlocked' graphics
         SetVisualsVisible(!locked);
     }
 
@@ -83,21 +71,17 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public void SwitchToDeckMode(bool showBack)
     {
         isDeckMode = true;
-
         if (cardBackObject != null) cardBackObject.SetActive(showBack);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
-
         SetVisualsVisible(true);
     }
 
     public void ResetToHandMode()
     {
         isDeckMode = false;
-
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
         if (selectionBorder != null) selectionBorder.SetActive(false);
-
         SetVisualsVisible(true);
     }
 
@@ -119,22 +103,25 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             return;
         }
 
-        if (pressTimer < holdTimeNeeded && !isDeckMode)
+        // --- CLICK LOGIC ---
+        if (pressTimer < holdTimeNeeded && !isDeckMode && !isEnemy)
         {
             if (HandManager.Instance == null) return;
 
-            if (isEnemy) return;
-
+            // Phase 1: Planning (Select to Lock)
             if (HandManager.Instance.isPlanningPhase)
             {
                 if (selectionBorder != null)
                 {
-                    HandManager.Instance.ToggleCardSelection(this, !selectionBorder.activeSelf);
-                    selectionBorder.SetActive(!selectionBorder.activeSelf);
+                    bool wasSelected = !selectionBorder.activeSelf;
+                    HandManager.Instance.ToggleCardSelection(this, wasSelected);
+                    selectionBorder.SetActive(wasSelected);
                 }
             }
+            // Phase 2: Battle (Select to Play)
             else
             {
+                // This is the part that was failing because the script was disabled!
                 HandManager.Instance.SelectCardForBattle(this);
             }
         }
@@ -145,11 +132,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (isPressed && !detailsShown)
         {
             pressTimer += Time.deltaTime;
-
             if (pressTimer >= holdTimeNeeded)
             {
-                if (cardBackObject != null && cardBackObject.activeSelf) return;
-
                 detailsShown = true;
                 if (HandManager.Instance != null && cardData != null)
                 {

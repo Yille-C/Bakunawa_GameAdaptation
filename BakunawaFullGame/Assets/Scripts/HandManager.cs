@@ -9,80 +9,22 @@ public class HandManager : MonoBehaviour
 {
     public static HandManager Instance;
 
-    [Header("Multiplayer & Roles")]
-    public string currentRole = "Attacker";
+    [Header("Game Settings")]
     public int cardsPerHand = 5;
+    public bool spawnEntireDatabase = true;
+    public float playCardScale = 1.2f;
+    public float discardScale = 0.8f;
+    public float planningTime = 60f;
 
-    [Header("Game Over UI")]
+    [Header("UI References")]
     public GameObject gameOverPanel;
-    public Image gameOverImage;
-    public Sprite victorySprite;
-    public Sprite defeatSprite;
     public Text winnerText;
     public Button restartButton;
     public Button mainMenuButton;
-
-    [Header("Extra Game Over Icons")]
-    public Image extraIconDisplay;
-    public Sprite bakunawaIconSprite;
-    public Sprite tribesmenIconSprite;
-
-    private bool isGameOver = false;
-
-    [Header("Discard Notification UI")]
-    public GameObject discardNotifyPanel;
-    public Image discardNotifyImage;
-    public Text discardNotifyText;
-    public float discardNotifyDuration = 3.0f;
-
-    [Header("Agong Retrieval UI")]
-    public GameObject agongPanel;
-    public Image agongCardImage;
-    public Text agongCardName;
-    public float agongDuration = 3.0f;
-
-    [Header("Alay to Bathala Choice UI")]
-    public GameObject alayChoicePanel;
-    public Button alayBuffButton;
-    public Button alayDebuffButton;
-    private bool alayChoiceMade = false;
-
-    [Header("Dice System")]
-    public GameObject dicePanel;
-    public Image playerDiceImg;
-    public Image enemyDiceImg;
-    public Button rollButton;
-    public List<Sprite> diceSprites;
-
-    [Header("Turn Choice UI")]
-    public GameObject turnChoicePanel;
-    public Button goFirstButton;
-    public Button goSecondButton;
-
-    [Header("Round Result UI")]
-    public GameObject resultBannerObject;
-    public Image bannerDisplayImage;
-    public Sprite tribesmenWinSprite;
-    public Sprite bakunawaWinSprite;
-    public Text fallbackText;
-    public float resultDuration = 2.0f;
-
-    [Header("Planning Banner & Round Info")]
-    public GameObject planningBanner;
-    public Text planningBannerText;
-    public float planningBannerDuration = 2.0f;
+    public Text timerText;
     public Text roundCounterText;
-
-    [Header("Combat Banner")]
-    public GameObject combatBanner;
-    public Text combatBannerText;
-    public float bannerDuration = 2.0f;
-
-    [Header("Energy System")]
-    public Slider energySlider;
-    public Text energyText;
-    public Text warningText;
-    public int maxEnergy = 10;
+    public Button lockInButton;
+    public Button playCardButton;
 
     [Header("Areas")]
     public GameObject cardPrefab;
@@ -92,17 +34,33 @@ public class HandManager : MonoBehaviour
     public Transform battleZone;
     public Transform discardPileArea;
 
-    [Header("UI Controls")]
-    public Button lockInButton;
-    public Button playCardButton;
-    public Text timerText;
+    [Header("Dice & Turn")]
+    public GameObject dicePanel;
+    public Image playerDiceImg;
+    public Image enemyDiceImg;
+    public Button rollButton;
+    public List<Sprite> diceSprites;
+    public GameObject turnChoicePanel;
+    public Button goFirstButton;
+    public Button goSecondButton;
+    public GameObject combatBanner;
+    public Text combatBannerText;
 
-    [Header("Settings")]
-    public float playCardScale = 1.2f;
-    public float discardScale = 0.8f;
-    public float planningTime = 60f;
+    // --- MISSING VARIABLES RESTORED HERE ---
+    [Header("Planning Banner & Round Info")]
+    public GameObject planningBanner;
+    public Text planningBannerText;
+    public float planningBannerDuration = 2.0f;
+    // ---------------------------------------
 
-    [Header("Details UI")]
+    [Header("Energy")]
+    public Slider energySlider;
+    public Text energyText;
+    public Text warningText;
+    public int maxEnergy = 10;
+    public int currentEnergy = 10;
+
+    [Header("Details Panel")]
     public GameObject detailsPanel;
     public Text detailName;
     public Text detailDesc;
@@ -113,23 +71,24 @@ public class HandManager : MonoBehaviour
     [Header("Data")]
     public List<CardData> allCardsDatabase;
 
-    private List<CardUI> selectedCardsUI = new List<CardUI>();
-
-    public bool isPlanningPhase = true;
-    private bool inputLocked = true;
-    private float currentTimer;
-    private CardUI currentBattleSelection;
-
-    // GAME STATE
-    public int roundNumber = 1;
-    private bool playerGoesFirst = true;
-    private bool enemyHasPlayedPendingCard = false;
-    private CardUI pendingEnemyCard = null;
-
-    // FLAGS
+    // --- Compatibility Vars ---
     public bool alayBuffActive = false;
     public bool alayDebuffActive = false;
     public bool agongPlayedThisRound = false;
+    public bool isGameOver = false;
+    // --------------------------
+
+    private List<CardUI> selectedCardsUI = new List<CardUI>();
+    public bool isPlanningPhase = true;
+    private bool inputLocked = false;
+    public int roundNumber = 1;
+    public bool playerGoesFirst = true;
+    private float currentTimerValue;
+    private CardUI currentBattleSelection;
+
+    // AI State
+    private bool enemyHasPlayed = false;
+    private CardUI pendingEnemyCard = null;
 
     void Awake()
     {
@@ -138,165 +97,163 @@ public class HandManager : MonoBehaviour
 
     void Start()
     {
-        if (SimpleNetworkManager.Instance != null)
-        {
-            currentRole = SimpleNetworkManager.Instance.myRole;
-        }
-
         // UI Cleanup
-        detailsPanel.SetActive(false);
-        if (warningText != null) warningText.gameObject.SetActive(false);
-        if (combatBanner != null) combatBanner.SetActive(false);
-        if (resultBannerObject != null) resultBannerObject.SetActive(false);
-        if (dicePanel != null) dicePanel.SetActive(false);
-        if (turnChoicePanel != null) turnChoicePanel.SetActive(false);
-        if (planningBanner != null) planningBanner.SetActive(false);
-        if (alayChoicePanel != null) alayChoicePanel.SetActive(false);
-        if (agongPanel != null) agongPanel.SetActive(false);
-        if (discardNotifyPanel != null) discardNotifyPanel.SetActive(false);
-        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (gameOverPanel) gameOverPanel.SetActive(false);
+        if (dicePanel) dicePanel.SetActive(false);
+        if (turnChoicePanel) turnChoicePanel.SetActive(false);
+        if (combatBanner) combatBanner.SetActive(false);
+        if (detailsPanel) detailsPanel.SetActive(false);
+        if (warningText) warningText.gameObject.SetActive(false);
 
+        // Ensure Planning Banner is hidden at start
+        if (planningBanner) planningBanner.SetActive(false);
+
+        restartButton.onClick.AddListener(() => SceneManager.LoadScene(SceneManager.GetActiveScene().name));
+        mainMenuButton.onClick.AddListener(() => SceneManager.LoadScene("MainMenu"));
         lockInButton.onClick.AddListener(OnLockInPressed);
         playCardButton.onClick.AddListener(OnPlayButtonPressed);
+        rollButton.onClick.AddListener(OnRollDicePressed);
+        goFirstButton.onClick.AddListener(() => FinalizeTurnOrder(true));
+        goSecondButton.onClick.AddListener(() => FinalizeTurnOrder(false));
 
-        if (rollButton != null) rollButton.onClick.AddListener(OnRollDicePressed);
-        if (goFirstButton != null) goFirstButton.onClick.AddListener(() => FinalizeTurnOrder(true));
-        if (goSecondButton != null) goSecondButton.onClick.AddListener(() => FinalizeTurnOrder(false));
-
-        if (alayBuffButton != null) alayBuffButton.onClick.AddListener(() => ResolveAlayChoice(true));
-        if (alayDebuffButton != null) alayDebuffButton.onClick.AddListener(() => ResolveAlayChoice(false));
-
-        if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
-        if (mainMenuButton != null) mainMenuButton.onClick.AddListener(GoToMainMenu);
-
-        lockInButton.gameObject.SetActive(true);
-        playCardButton.gameObject.SetActive(false);
-
-        roundNumber = 1;
-        UpdateRoundUI();
-
-        SpawnDeck();
-        StartCoroutine(StartPlanningPhaseSequence());
+        StartNewRound();
     }
 
     void Update()
     {
-        if (isGameOver) return;
-
         if (isPlanningPhase && !inputLocked)
         {
-            currentTimer -= Time.deltaTime;
-            if (timerText != null)
+            currentTimerValue -= Time.deltaTime;
+            UpdateTimerUI(currentTimerValue);
+
+            if (currentTimerValue <= 0)
             {
-                float displayTime = currentTimer < 0 ? 0 : currentTimer;
-                int minutes = Mathf.FloorToInt(displayTime / 60F);
-                int seconds = Mathf.FloorToInt(displayTime % 60F);
-                timerText.text = string.Format("{0}:{1:00}", minutes, seconds);
-                timerText.color = currentTimer <= 10f ? Color.red : Color.white;
-            }
-            if (currentTimer <= 0)
-            {
-                currentTimer = 0;
+                currentTimerValue = 0;
                 OnLockInPressed();
             }
         }
     }
 
-    void UpdateRoundUI()
+    void StartNewRound()
     {
-        if (roundCounterText != null) roundCounterText.text = roundNumber.ToString();
+        UpdateRoundUI(); // Update Visuals
+
+        // Reset State
+        isPlanningPhase = true;
+        inputLocked = false;
+        currentEnergy = maxEnergy;
+        currentTimerValue = planningTime;
+
+        // Reset UI
+        UpdateEnergyUI();
+        lockInButton.gameObject.SetActive(true);
+        playCardButton.gameObject.SetActive(false);
+        if (timerText) timerText.gameObject.SetActive(true);
+
+        SpawnDeck();
+
+        StartCoroutine(StartPlanningPhaseSequence());
     }
 
-    // --- ROLE BASED SPAWNING ---
     void SpawnDeck()
     {
-        List<CardData> roleDeck = new List<CardData>();
+        foreach (Transform t in handArea) Destroy(t.gameObject);
 
-        if (currentRole == "Attacker") roleDeck = allCardsDatabase.Where(c => c.type == CardType.Attack).ToList();
-        else if (currentRole == "Tank") roleDeck = allCardsDatabase.Where(c => c.type == CardType.Defense).ToList();
-        else if (currentRole == "Support") roleDeck = allCardsDatabase.Where(c => c.type == CardType.Support).ToList();
-        else roleDeck = allCardsDatabase;
+        List<CardData> source = new List<CardData>(allCardsDatabase);
+        int countToSpawn = spawnEntireDatabase ? source.Count : cardsPerHand;
 
-        for (int i = 0; i < cardsPerHand; i++)
+        for (int i = 0; i < countToSpawn; i++)
         {
-            if (roleDeck.Count == 0) break;
-            int randIndex = Random.Range(0, roleDeck.Count);
-            CardData cardToSpawn = roleDeck[randIndex];
+            if (source.Count == 0) break;
+            CardData data = source[i];
+            GameObject cardObj = Instantiate(cardPrefab, handArea);
+            CardUI ui = cardObj.GetComponent<CardUI>();
+            ui.Setup(data);
 
-            GameObject newCard = Instantiate(cardPrefab, handArea);
-            CardUI ui = newCard.GetComponent<CardUI>();
-            ui.Setup(cardToSpawn);
-
-            CardDisplay display = newCard.GetComponent<CardDisplay>();
-            if (display != null)
-            {
-                display.cardData = cardToSpawn;
-                display.currentAttack = cardToSpawn.attackValue;
-            }
+            CardDisplay d = cardObj.GetComponent<CardDisplay>();
+            if (d) { d.cardData = data; d.currentAttack = data.attackValue; }
         }
     }
 
-    // --- LOCK IN ---
+    public void ToggleCardSelection(CardUI card, bool isSelected)
+    {
+        if (!isPlanningPhase) return;
+        if (isSelected) selectedCardsUI.Add(card);
+        else selectedCardsUI.Remove(card);
+        UpdateEnergyUI();
+    }
+
     void OnLockInPressed()
     {
         if (inputLocked) return;
 
-        int currentUsed = 0;
-        foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card);
+        int cost = 0;
+        foreach (CardUI c in selectedCardsUI) cost += c.cardData.energyCost;
 
-        if (currentUsed > maxEnergy)
+        if (cost > currentEnergy)
         {
             StartCoroutine(ShowWarningSequence());
             return;
         }
 
+        // Lock Logic
+        currentEnergy -= cost;
+        UpdateEnergyUI();
         isPlanningPhase = false;
         inputLocked = true;
         lockInButton.gameObject.SetActive(false);
-        if (timerText != null) timerText.text = "";
-        SetEnergyUIActive(false);
+        if (timerText) timerText.gameObject.SetActive(false);
 
-        foreach (CardUI card in selectedCardsUI)
+        // Move SELECTED cards to Locked Area
+        foreach (CardUI c in selectedCardsUI)
         {
-            card.transform.SetParent(lockedHandArea);
-            card.selectionBorder.SetActive(false);
-            card.SetLockedState(true);
-
-            // Safely get card name for network using CardDisplay
-            CardDisplay d = card.GetComponent<CardDisplay>();
-            string cName = (d != null && d.cardData != null) ? d.cardData.cardName : "Unknown";
-
-            if (SimpleNetworkManager.Instance != null)
-                SimpleNetworkManager.Instance.SendMessageToServer("LOCK_CARD:" + cName);
-        }
-
-        List<Transform> remainingCards = new List<Transform>();
-        foreach (Transform child in handArea) remainingCards.Add(child);
-        foreach (Transform child in remainingCards)
-        {
-            CardUI card = child.GetComponent<CardUI>();
-            if (card != null)
-            {
-                card.transform.SetParent(deckPileArea);
-                card.transform.localPosition = Vector3.zero;
-                card.SwitchToDeckMode(false);
-            }
+            c.transform.SetParent(lockedHandArea);
+            c.selectionBorder.SetActive(false);
+            c.SetLockedState(true);
         }
         selectedCardsUI.Clear();
 
-        if (BakunawaAI.Instance != null) BakunawaAI.Instance.LockInPlan();
+        // Clear Hand (Move unused to deck pile)
+        List<Transform> unusedCards = new List<Transform>();
+        foreach (Transform t in handArea) unusedCards.Add(t);
+
+        foreach (Transform t in unusedCards)
+        {
+            CardUI c = t.GetComponent<CardUI>();
+            if (c != null)
+            {
+                c.transform.SetParent(deckPileArea);
+                c.SwitchToDeckMode(false);
+                c.transform.localPosition = Vector3.zero;
+                c.transform.localScale = Vector3.zero;
+            }
+        }
+
+        // Trigger AI
+        if (BakunawaAI.Instance) BakunawaAI.Instance.SinglePlayerLockIn();
 
         StartDicePhase();
     }
 
-    // --- DICE & TURN ---
+    // --- DICE & BANNERS ---
     void StartDicePhase()
     {
-        if (dicePanel != null) { dicePanel.SetActive(true); rollButton.interactable = true; }
-        else FinalizeTurnOrder(true);
+        if (dicePanel)
+        {
+            dicePanel.SetActive(true);
+            rollButton.interactable = true;
+        }
+        else
+        {
+            FinalizeTurnOrder(true);
+        }
     }
 
-    void OnRollDicePressed() { rollButton.interactable = false; StartCoroutine(RollDiceRoutine()); }
+    void OnRollDicePressed()
+    {
+        rollButton.interactable = false;
+        StartCoroutine(RollDiceRoutine());
+    }
 
     IEnumerator RollDiceRoutine()
     {
@@ -308,7 +265,7 @@ public class HandManager : MonoBehaviour
         {
             pRoll = Random.Range(1, 7);
             eRoll = Random.Range(1, 7);
-            if (diceSprites != null && diceSprites.Count >= 6)
+            if (diceSprites.Count >= 6)
             {
                 playerDiceImg.sprite = diceSprites[pRoll - 1];
                 enemyDiceImg.sprite = diceSprites[eRoll - 1];
@@ -317,68 +274,41 @@ public class HandManager : MonoBehaviour
             yield return new WaitForSeconds(0.1f);
         }
 
-        Debug.Log($"Dice Roll! Player: {pRoll}, Enemy: {eRoll}");
         yield return new WaitForSeconds(0.5f);
 
         if (pRoll > eRoll)
         {
-            if (turnChoicePanel != null) { turnChoicePanel.SetActive(true); dicePanel.SetActive(false); }
+            if (turnChoicePanel) { turnChoicePanel.SetActive(true); dicePanel.SetActive(false); }
             else FinalizeTurnOrder(true);
         }
         else if (eRoll > pRoll)
         {
             dicePanel.SetActive(false);
-            ProcessBakunawaTurnDecision();
+            FinalizeTurnOrder(false);
         }
-        else { rollButton.interactable = true; }
+        else
+        {
+            rollButton.interactable = true;
+        }
     }
 
-    void ProcessBakunawaTurnDecision()
+    void FinalizeTurnOrder(bool pFirst)
     {
-        int playerCards = lockedHandArea.childCount;
-        int enemyCards = 0;
-        if (BakunawaAI.Instance != null && BakunawaAI.Instance.lockedArea != null)
-            enemyCards = BakunawaAI.Instance.lockedArea.childCount;
-
-        bool aiGoesFirst = true;
-        if (enemyCards < playerCards) aiGoesFirst = false;
-        else if (enemyCards > playerCards) aiGoesFirst = true;
-        else aiGoesFirst = (Random.value > 0.5f);
-
-        FinalizeTurnOrder(!aiGoesFirst);
-    }
-
-    void FinalizeTurnOrder(bool playerIsFirst)
-    {
-        playerGoesFirst = playerIsFirst;
-        if (turnChoicePanel != null) turnChoicePanel.SetActive(false);
-        if (dicePanel != null) dicePanel.SetActive(false);
+        playerGoesFirst = pFirst;
+        if (turnChoicePanel) turnChoicePanel.SetActive(false);
+        if (dicePanel) dicePanel.SetActive(false);
         StartCoroutine(CombatBannerSequence());
     }
 
     IEnumerator CombatBannerSequence()
     {
-        if (combatBanner != null)
+        if (combatBanner)
         {
             combatBanner.SetActive(true);
-            CanvasGroup bannerGroup = combatBanner.GetComponent<CanvasGroup>();
-            if (bannerGroup != null) { bannerGroup.alpha = 0; while (bannerGroup.alpha < 1) { bannerGroup.alpha += Time.deltaTime * 3f; yield return null; } }
-
-            if (combatBannerText != null)
-            {
-                combatBannerText.text = "CARD CLASH!";
-                yield return StartCoroutine(FadeTextInAndOut(combatBannerText, 1.5f));
-            }
-            if (combatBannerText != null)
-            {
-                combatBannerText.text = playerGoesFirst ? "TRIBESMEN STRIKES FIRST!" : "BAKUNAWA STRIKES FIRST!";
-                yield return StartCoroutine(FadeTextInAndOut(combatBannerText, 2.0f));
-            }
-
-            if (bannerGroup != null) { while (bannerGroup.alpha > 0) { bannerGroup.alpha -= Time.deltaTime * 3f; yield return null; } }
+            if (combatBannerText) combatBannerText.text = playerGoesFirst ? "TRIBESMEN TURN" : "BAKUNAWA TURN";
+            yield return new WaitForSeconds(2.0f);
             combatBanner.SetActive(false);
         }
-        else yield return new WaitForSeconds(1.0f);
         StartBattlePhase();
     }
 
@@ -386,335 +316,239 @@ public class HandManager : MonoBehaviour
     void StartBattlePhase()
     {
         inputLocked = false;
-        if (lockedHandArea.childCount == 0)
-        {
-            playCardButton.gameObject.SetActive(false);
-            StartCoroutine(BakunawaSoloPlaySequence());
-            return;
-        }
+        if (BakunawaAI.Instance) BakunawaAI.Instance.RevealCards();
 
         if (playerGoesFirst)
         {
-            enemyHasPlayedPendingCard = false;
-            pendingEnemyCard = null;
-            playCardButton.gameObject.SetActive(true);
             playCardButton.interactable = true;
+            playCardButton.gameObject.SetActive(true);
         }
         else
         {
-            playCardButton.gameObject.SetActive(true);
             playCardButton.interactable = false;
-            StartCoroutine(EnemyPlaysFirstRoutine());
+            playCardButton.gameObject.SetActive(true);
+            StartCoroutine(AiTurnRoutine());
         }
-    }
-
-    IEnumerator EnemyPlaysFirstRoutine()
-    {
-        yield return new WaitForSeconds(1.0f);
-        if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
-        {
-            pendingEnemyCard = BakunawaAI.Instance.PlayCard();
-            enemyHasPlayedPendingCard = true;
-            RecalculateBattleEffects();
-            playCardButton.interactable = true;
-        }
-        else playCardButton.interactable = true;
     }
 
     public void SelectCardForBattle(CardUI card)
     {
-        if (inputLocked || (playCardButton != null && !playCardButton.interactable)) return;
-        if (currentBattleSelection != null && currentBattleSelection.selectionBorder != null)
-            currentBattleSelection.selectionBorder.SetActive(false);
+        if (inputLocked) return;
+        if (currentBattleSelection) currentBattleSelection.selectionBorder.SetActive(false);
         currentBattleSelection = card;
-        if (currentBattleSelection.selectionBorder != null)
-            currentBattleSelection.selectionBorder.SetActive(true);
-    }
-
-    // --- SELECTION LOGIC ---
-    public bool ToggleCardSelection(CardUI cardUI, bool isSelected)
-    {
-        if (!isPlanningPhase) return false;
-        if (isSelected) selectedCardsUI.Add(cardUI);
-        else selectedCardsUI.Remove(cardUI);
-        UpdateEnergyUI();
-        return true;
+        if (currentBattleSelection) currentBattleSelection.selectionBorder.SetActive(true);
     }
 
     void OnPlayButtonPressed()
     {
         if (currentBattleSelection == null) return;
-        StartCoroutine(PlayPlayerCardSequence(currentBattleSelection));
+        StartCoroutine(PlayerPlayRoutine(currentBattleSelection));
     }
 
-    IEnumerator PlayPlayerCardSequence(CardUI cardToPlay)
+    IEnumerator PlayerPlayRoutine(CardUI card)
     {
         playCardButton.interactable = false;
-        CardDisplay display = cardToPlay.GetComponent<CardDisplay>();
+        inputLocked = true;
 
-        if (display != null && display.cardData != null)
-        {
-            if (display.cardData.effectID == "sup_alay") yield return StartCoroutine(ShowAlayChoice());
-            if (display.cardData.effectID == "def_agong") agongPlayedThisRound = true;
-        }
-
-        cardToPlay.transform.SetParent(battleZone);
-        cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
-        cardToPlay.transform.localRotation = Quaternion.identity;
-        cardToPlay.SetLockedState(false);
-        cardToPlay.selectionBorder.SetActive(false);
-
-        RecalculateBattleEffects();
+        MoveCardToBattle(card, false); // Player Left
         currentBattleSelection = null;
 
-        if (playerGoesFirst) StartCoroutine(BakunawaResponseSequence(cardToPlay));
-        else
+        if (playerGoesFirst)
         {
-            if (enemyHasPlayedPendingCard && pendingEnemyCard != null) StartCoroutine(ResolveImmediateClash(cardToPlay, pendingEnemyCard));
-            else StartCoroutine(ResolveImmediateClash(cardToPlay, null));
-        }
-    }
-
-    IEnumerator BakunawaResponseSequence(CardUI playerCard)
-    {
-        yield return new WaitForSeconds(1.0f);
-        if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
-        {
-            CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            RecalculateBattleEffects();
-            if (ScoreManager.Instance != null) ScoreManager.Instance.ResolveClash(GetCardAttack(playerCard), GetCardAttack(enemyCard));
-        }
-        else if (ScoreManager.Instance != null)
-        {
-            ScoreManager.Instance.ResolveClash(GetCardAttack(playerCard), 0);
-        }
-        yield return new WaitForSeconds(0.5f);
-        ContinueBattleLoop();
-    }
-
-    IEnumerator ResolveImmediateClash(CardUI playerCard, CardUI enemyCard)
-    {
-        yield return new WaitForSeconds(0.5f);
-        int pAtk = GetCardAttack(playerCard);
-        int eAtk = (enemyCard != null) ? GetCardAttack(enemyCard) : 0;
-        if (ScoreManager.Instance != null) ScoreManager.Instance.ResolveClash(pAtk, eAtk);
-        enemyHasPlayedPendingCard = false;
-        pendingEnemyCard = null;
-        yield return new WaitForSeconds(0.5f);
-
-        if (!playerGoesFirst)
-        {
-            if (lockedHandArea.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
-            else ContinueBattleLoop();
-        }
-        else ContinueBattleLoop();
-    }
-
-    void ContinueBattleLoop()
-    {
-        if (lockedHandArea.childCount > 0) playCardButton.interactable = true;
-        else
-        {
-            if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards()) StartCoroutine(BakunawaSoloPlaySequence());
-            else StartCoroutine(EndRoundSequence());
-        }
-    }
-
-    IEnumerator BakunawaSoloPlaySequence()
-    {
-        while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
-        {
+            // Player attacks -> AI defends
             yield return new WaitForSeconds(1.0f);
-            CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            RecalculateBattleEffects();
-            if (ScoreManager.Instance != null) ScoreManager.Instance.ResolveClash(0, GetCardAttack(enemyCard));
-            yield return new WaitForSeconds(0.5f);
-        }
-        StartCoroutine(EndRoundSequence());
-    }
-
-    // --- END ROUND ---
-    IEnumerator EndRoundSequence()
-    {
-        int pScore = 0, bScore = 0;
-        bool playerLost = false, bakunawaWon = false;
-
-        if (ScoreManager.Instance != null)
-        {
-            pScore = ScoreManager.Instance.playerTotal;
-            bScore = ScoreManager.Instance.bakunawaTotal;
-            ScoreManager.Instance.ResolveRound();
-            if (bScore > pScore) { playerLost = true; bakunawaWon = true; }
-        }
-
-        yield return StartCoroutine(ShowResultBanner(pScore, bScore));
-
-        if (playerLost && agongPlayedThisRound) yield return StartCoroutine(ShowAgongRetrieval());
-
-        if (bakunawaWon)
-        {
-            bool lunarActive = false, tidalActive = false;
-            int bakunawaCardCount = 0;
-            foreach (Transform t in battleZone)
+            if (BakunawaAI.Instance.HasCards())
             {
-                CardUI c = t.GetComponent<CardUI>();
-                if (c != null && c.isEnemy)
-                {
-                    bakunawaCardCount++;
-                    CardDisplay d = c.GetComponent<CardDisplay>();
-                    if (d != null && d.cardData != null)
-                    {
-                        if (d.cardData.effectID == "atk_lunar") lunarActive = true;
-                        if (d.cardData.effectID == "sup_tidal") tidalActive = true;
-                    }
-                }
+                CardUI aiCard = BakunawaAI.Instance.PlayCard();
+                MoveCardToBattle(aiCard, true); // AI Right
+                ResolveClash(card, aiCard);
             }
-            if (lunarActive && bakunawaCardCount == 1 && ScoreManager.Instance != null) ScoreManager.Instance.UpdateTowerScore(1);
-            if (tidalActive) yield return StartCoroutine(DiscardPlayerCardSequence("Tidal Pull"));
-        }
-
-        int bakuRuntimeCount = 0;
-        if (BakunawaAI.Instance != null)
-        {
-            bakuRuntimeCount += BakunawaAI.Instance.deckPileArea.childCount;
-            bakuRuntimeCount += BakunawaAI.Instance.handArea.childCount;
-        }
-
-        if (bakuRuntimeCount <= 5)
-        {
-            bool draconicPlayed = false;
-            foreach (Transform t in battleZone)
+            else
             {
-                CardUI c = t.GetComponent<CardUI>();
-                if (c != null && c.isEnemy)
-                {
-                    CardDisplay d = c.GetComponent<CardDisplay>();
-                    if (d != null && d.cardData != null && d.cardData.effectID == "sup_draconic") draconicPlayed = true;
-                }
+                ResolveClash(card, null); // Unopposed
             }
-            if (draconicPlayed) yield return StartCoroutine(DiscardPlayerCardSequence("Draconic Patience"));
+        }
+        else
+        {
+            // AI already attacked -> Player defending
+            ResolveClash(card, pendingEnemyCard);
+            pendingEnemyCard = null;
+            enemyHasPlayed = false;
         }
 
         yield return new WaitForSeconds(1.0f);
+        CleanBattleZone();
+        CheckRoundEndOrNextTurn();
+    }
 
-        List<CardUI> playedCards = new List<CardUI>();
-        foreach (Transform child in battleZone) { CardUI card = child.GetComponent<CardUI>(); if (card != null) playedCards.Add(card); }
-        foreach (CardUI card in playedCards) MoveToPile(card, discardPileArea, true);
-        if (BakunawaAI.Instance != null) BakunawaAI.Instance.CleanupRound();
-
+    IEnumerator AiTurnRoutine()
+    {
         yield return new WaitForSeconds(1.0f);
-        StartNextRound();
+
+        if (BakunawaAI.Instance.HasCards())
+        {
+            CardUI aiCard = BakunawaAI.Instance.PlayCard();
+            MoveCardToBattle(aiCard, true); // AI Right
+            pendingEnemyCard = aiCard;
+            enemyHasPlayed = true;
+
+            inputLocked = false;
+            playCardButton.interactable = true;
+        }
+        else
+        {
+            // AI Empty, pass to player
+            inputLocked = false;
+            playCardButton.interactable = true;
+        }
     }
 
-    // --- HELPERS & UTILS ---
-    IEnumerator ShowResultBanner(int pScore, int bScore)
+    void CheckRoundEndOrNextTurn()
     {
-        if (resultBannerObject != null)
+        bool playerEmpty = lockedHandArea.childCount == 0;
+        bool aiEmpty = !BakunawaAI.Instance.HasCards();
+
+        if (playerEmpty && aiEmpty)
         {
-            if (bannerDisplayImage != null)
+            if (ScoreManager.Instance) ScoreManager.Instance.ResolveRound();
+            CheckFinalScoreWin();
+
+            if (!isGameOver)
             {
-                bannerDisplayImage.color = Color.white;
-                if (pScore > bScore && tribesmenWinSprite != null)
-                {
-                    bannerDisplayImage.sprite = tribesmenWinSprite;
-                    if (fallbackText) fallbackText.gameObject.SetActive(false);
-                }
-                else if (bScore > pScore && bakunawaWinSprite != null)
-                {
-                    bannerDisplayImage.sprite = bakunawaWinSprite;
-                    if (fallbackText) fallbackText.gameObject.SetActive(false);
-                }
-                else if (fallbackText)
-                {
-                    fallbackText.gameObject.SetActive(true);
-                    fallbackText.text = "DRAW!";
-                }
+                roundNumber++;
+                StartNewRound();
             }
-            resultBannerObject.SetActive(true);
-            CanvasGroup group = resultBannerObject.GetComponent<CanvasGroup>();
-            if (group != null) { group.alpha = 0; while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } }
-            yield return new WaitForSeconds(resultDuration);
-            if (group != null) { float fadeSpeed = 3f; while (group.alpha > 0) { group.alpha -= Time.deltaTime * fadeSpeed; yield return null; } }
-            resultBannerObject.SetActive(false);
+        }
+        else
+        {
+            if (playerGoesFirst)
+            {
+                inputLocked = false;
+                playCardButton.interactable = true;
+            }
+            else
+            {
+                StartCoroutine(AiTurnRoutine());
+            }
         }
     }
 
-    void RecalculateBattleEffects()
+    void MoveCardToBattle(CardUI card, bool isEnemy)
     {
-        if (CardEffectManager.Instance == null) return;
-        List<CardUI> playerBattleCards = new List<CardUI>();
-        List<CardUI> enemyBattleCards = new List<CardUI>();
+        card.transform.SetParent(battleZone);
+        card.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        card.transform.localRotation = Quaternion.identity;
 
-        List<CardUI> allCards = new List<CardUI>();
-        foreach (Transform t in battleZone) { CardUI c = t.GetComponent<CardUI>(); if (c != null) allCards.Add(c); }
-        if (BakunawaAI.Instance != null && BakunawaAI.Instance.battleZone != null && BakunawaAI.Instance.battleZone != battleZone)
+        float xOffset = isEnemy ? 150f : -150f;
+        card.transform.localPosition = new Vector3(xOffset, 0, 0);
+
+        card.SetLockedState(false);
+    }
+
+    void ResolveClash(CardUI p, CardUI e)
+    {
+        int pAtk = p.cardData.attackValue;
+        int eAtk = (e != null) ? e.cardData.attackValue : 0;
+        Debug.Log($"Clash: Player {pAtk} vs AI {eAtk}");
+        if (ScoreManager.Instance) ScoreManager.Instance.ResolveClash(pAtk, eAtk);
+    }
+
+    void CleanBattleZone()
+    {
+        foreach (Transform t in battleZone)
         {
-            foreach (Transform t in BakunawaAI.Instance.battleZone) { CardUI c = t.GetComponent<CardUI>(); if (c != null) allCards.Add(c); }
-        }
-
-        foreach (CardUI c in allCards) { if (c.isEnemy) enemyBattleCards.Add(c); else playerBattleCards.Add(c); }
-
-        var pResult = CardEffectManager.Instance.CalculateRoundStats(playerBattleCards, enemyBattleCards);
-        var eResult = CardEffectManager.Instance.CalculateRoundStats(enemyBattleCards, playerBattleCards);
-
-        if (ScoreManager.Instance != null)
-        {
-            ScoreManager.Instance.enemyDebuffValue = pResult.damageReductionToEnemy;
-            ScoreManager.Instance.playerDebuffValue = eResult.damageReductionToEnemy;
+            t.SetParent(discardPileArea);
+            t.localPosition = Vector3.zero;
+            t.localScale = Vector3.one * discardScale;
         }
     }
 
-    void StartNextRound()
+    // --- UI HELPERS ---
+    public void UpdateEnergyUI()
     {
-        if (roundNumber >= 10) { CheckFinalScoreWin(); return; }
+        int cost = 0;
+        foreach (CardUI c in selectedCardsUI) cost += c.cardData.energyCost;
+        int displayEnergy = currentEnergy - cost;
 
-        if (deckPileArea.childCount > 0) { List<CardUI> unused = new List<CardUI>(); foreach (Transform child in deckPileArea) { CardUI c = child.GetComponent<CardUI>(); if (c != null) unused.Add(c); } foreach (CardUI c in unused) ReturnCardToHand(c); }
-        else { List<CardUI> discarded = new List<CardUI>(); foreach (Transform child in discardPileArea) { CardUI c = child.GetComponent<CardUI>(); if (c != null) discarded.Add(c); } ShuffleList(discarded); foreach (CardUI c in discarded) ReturnCardToHand(c); }
+        if (energySlider) energySlider.value = displayEnergy;
+        if (energyText) energyText.text = displayEnergy + "/" + maxEnergy;
+    }
 
-        isPlanningPhase = true;
-        currentTimer = planningTime;
-        if (timerText != null) timerText.color = Color.white;
-        lockInButton.gameObject.SetActive(true);
-        playCardButton.gameObject.SetActive(false);
-        playCardButton.interactable = true;
-        selectedCardsUI.Clear();
-        SetEnergyUIActive(true);
-        UpdateEnergyUI();
-        if (ScoreManager.Instance != null) { ScoreManager.Instance.enemyDebuffValue = 0; ScoreManager.Instance.playerDebuffValue = 0; }
+    public void UpdateTimerUI(float time)
+    {
+        if (timerText)
+        {
+            int min = Mathf.FloorToInt(time / 60F);
+            int sec = Mathf.FloorToInt(time % 60F);
+            timerText.text = string.Format("{0}:{1:00}", min, sec);
+            timerText.color = time <= 10 ? Color.red : Color.white;
+        }
+    }
 
-        roundNumber++;
-        UpdateRoundUI();
-        StartCoroutine(StartPlanningPhaseSequence());
+    public void UpdateRoundUI()
+    {
+        if (roundCounterText != null) roundCounterText.text = roundNumber.ToString();
+    }
+
+    IEnumerator ShowWarningSequence()
+    {
+        warningText.gameObject.SetActive(true);
+        yield return new WaitForSeconds(1.0f);
+        warningText.gameObject.SetActive(false);
     }
 
     void CheckFinalScoreWin()
     {
-        if (ScoreManager.Instance == null) return;
-        int score = ScoreManager.Instance.currentTowerScore;
-        if (score > 0) TriggerGameOver("Bakunawa");
-        else if (score < 0) TriggerGameOver("Tribesmen");
-        else TriggerGameOver("Draw");
+        if (!ScoreManager.Instance) return;
+        int s = ScoreManager.Instance.currentTowerScore;
+        if (s >= 5) TriggerGameOver("Bakunawa");
+        else if (s <= -5) TriggerGameOver("Tribesmen");
+        else if (roundNumber >= 10) TriggerGameOver("Draw");
     }
 
-    void ReturnCardToHand(CardUI card) { card.transform.SetParent(handArea); card.transform.localRotation = Quaternion.identity; card.transform.localScale = Vector3.one; card.ResetToHandMode(); }
-    void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
-    void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
+    public void TriggerGameOver(string w)
+    {
+        if (isGameOver) return;
+        isGameOver = true;
+        if (gameOverPanel)
+        {
+            gameOverPanel.SetActive(true);
+            if (winnerText) winnerText.text = w + " WINS!";
+        }
+    }
 
-    // --- DETAILS & UI UTILS ---
-    public void ShowCardDetails(CardData data) { detailsPanel.SetActive(true); if (detailName != null) detailName.text = data.cardName; if (detailDesc != null) detailDesc.text = data.description; if (detailImage != null && data.cardArt != null) detailImage.sprite = data.cardArt; if (detailCost != null) detailCost.text = data.energyCost.ToString(); if (detailAttack != null) detailAttack.text = data.attackValue.ToString(); }
+    public void ShowCardDetails(CardData d) { detailsPanel.SetActive(true); detailName.text = d.cardName; detailDesc.text = d.description; detailImage.sprite = d.cardArt; detailCost.text = d.energyCost.ToString(); detailAttack.text = d.attackValue.ToString(); }
     public void HideCardDetails() { detailsPanel.SetActive(false); }
-    void UpdateEnergyUI() { int used = 0; foreach (CardUI c in selectedCardsUI) used += GetCardCost(c); int remaining = maxEnergy - used; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining + "/" + maxEnergy; energyText.color = remaining < 0 ? Color.red : Color.white; } }
-    void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
-    IEnumerator ShowWarningSequence() { if (warningText != null) { warningText.gameObject.SetActive(true); warningText.color = Color.white; yield return new WaitForSeconds(0.5f); float dur = 1.0f, cur = 0f; while (cur < dur) { warningText.color = new Color(1, 1, 1, Mathf.Lerp(1, 0, cur / dur)); cur += Time.deltaTime; yield return null; } warningText.gameObject.SetActive(false); } }
-    int GetCardCost(CardUI card) { if (card == null) return 0; CardDisplay d = card.GetComponent<CardDisplay>(); if (d != null && d.cardData != null) return d.cardData.energyCost; return 0; }
-    int GetCardAttack(CardUI card) { if (card == null) return 0; CardDisplay d = card.GetComponent<CardDisplay>(); if (d != null) return d.currentAttack; return 0; }
-    IEnumerator ShowAlayChoice() { if (alayChoicePanel != null) { alayChoicePanel.SetActive(true); alayChoiceMade = false; while (!alayChoiceMade) yield return null; alayChoicePanel.SetActive(false); } }
-    void ResolveAlayChoice(bool isBuff) { if (isBuff) { alayBuffActive = true; alayDebuffActive = false; } else { alayBuffActive = false; alayDebuffActive = true; } alayChoiceMade = true; }
-    IEnumerator DiscardPlayerCardSequence(string source) { Transform t = null; if (deckPileArea.childCount > 0) t = deckPileArea.GetChild(0); else if (handArea.childCount > 0) t = handArea.GetChild(0); if (t != null) { if (discardNotifyPanel != null) { discardNotifyPanel.SetActive(true); if (discardNotifyText != null) discardNotifyText.text = source + "\nDiscarded:\n" + t.GetComponent<CardDisplay>().cardData.cardName; yield return new WaitForSeconds(discardNotifyDuration); discardNotifyPanel.SetActive(false); } MoveToPile(t.GetComponent<CardUI>(), discardPileArea, true); } }
-    IEnumerator ShowAgongRetrieval() { if (discardPileArea.childCount > 0) { Transform t = discardPileArea.GetChild(discardPileArea.childCount - 1); if (agongPanel != null) { agongPanel.SetActive(true); if (agongCardName != null) agongCardName.text = t.GetComponent<CardDisplay>().cardData.cardName; yield return new WaitForSeconds(agongDuration); agongPanel.SetActive(false); } ReturnCardToHand(t.GetComponent<CardUI>()); } }
-    public void TriggerGameOver(string winner) { if (isGameOver) return; isGameOver = true; if (gameOverPanel != null) { gameOverPanel.SetActive(true); if (winnerText != null) { winnerText.text = winner.ToUpper() + " WINS!"; winnerText.color = winner == "Tribesmen" ? new Color(0f, 1f, 1f) : Color.red; } if (gameOverImage != null) { gameOverImage.color = Color.white; if (winner == "Tribesmen" && victorySprite != null) gameOverImage.sprite = victorySprite; else if (defeatSprite != null) gameOverImage.sprite = defeatSprite; } if (extraIconDisplay != null) { extraIconDisplay.gameObject.SetActive(true); extraIconDisplay.sprite = (winner == "Tribesmen") ? tribesmenIconSprite : bakunawaIconSprite; } } }
-    void RestartGame() { SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
-    void GoToMainMenu() { SceneManager.LoadScene("MainMenu"); }
-    IEnumerator StartPlanningPhaseSequence() { inputLocked = true; isPlanningPhase = true; currentTimer = planningTime; SetEnergyUIActive(false); alayBuffActive = false; alayDebuffActive = false; agongPlayedThisRound = false; if (planningBanner != null) { planningBanner.SetActive(true); CanvasGroup group = planningBanner.GetComponent<CanvasGroup>(); if (group != null) { group.alpha = 0; while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } } if (planningBannerText != null) { planningBannerText.text = "ROUND " + roundNumber; yield return StartCoroutine(FadeTextInAndOut(planningBannerText, 1.5f)); } if (planningBannerText != null) { planningBannerText.text = "PLANNING PHASE"; yield return StartCoroutine(FadeTextInAndOut(planningBannerText, 1.5f)); } if (group != null) { while (group.alpha > 0) { group.alpha -= Time.deltaTime * 3f; yield return null; } } planningBanner.SetActive(false); } else yield return new WaitForSeconds(1.0f); inputLocked = false; SetEnergyUIActive(true); UpdateEnergyUI(); }
-    IEnumerator FadeTextInAndOut(Text textObj, float displayDuration) { Color c = textObj.color; float t = 0; while (t < 1) { t += Time.deltaTime * 3f; textObj.color = new Color(c.r, c.g, c.b, t); yield return null; } yield return new WaitForSeconds(displayDuration); t = 1; while (t > 0) { t -= Time.deltaTime * 3f; textObj.color = new Color(c.r, c.g, c.b, t); yield return null; } }
+
+    // --- PLANNING BANNER SEQUENCE (Fixed) ---
+    IEnumerator StartPlanningPhaseSequence()
+    {
+        inputLocked = true;
+        isPlanningPhase = true;
+
+        if (planningBanner != null)
+        {
+            planningBanner.SetActive(true);
+
+            if (planningBannerText != null)
+            {
+                planningBannerText.text = "ROUND " + roundNumber;
+                yield return new WaitForSeconds(1.5f);
+                planningBannerText.text = "PLANNING PHASE";
+                yield return new WaitForSeconds(1.5f);
+            }
+            else
+            {
+                yield return new WaitForSeconds(2.0f);
+            }
+            planningBanner.SetActive(false);
+        }
+        else yield return new WaitForSeconds(1.0f);
+
+        inputLocked = false;
+        UpdateEnergyUI();
+    }
+
+    // --- Helper for Fade (Optional, kept for compatibility if referenced elsewhere) ---
+    IEnumerator FadeTextInAndOut(Text t, float d) { yield return new WaitForSeconds(d); }
 }
