@@ -94,6 +94,7 @@ public class HandManager : MonoBehaviour
 
     [Header("Settings")]
     public float playCardScale = 1.2f;
+    public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
     public float discardScale = 0.8f;
     public float planningTime = 60f;
 
@@ -106,6 +107,13 @@ public class HandManager : MonoBehaviour
     public Text detailCost;
     public Text detailAttack;
     // -------------------
+
+    [Header("Hand Pagination")]
+    public int cardsPerPage = 5;
+    public Button prevPageBtn;
+    public Button nextPageBtn;
+    public Text pageIndicatorText;
+    private int currentPage = 0;
 
     [Header("Data")]
     public List<CardData> myDeck;
@@ -161,6 +169,17 @@ public class HandManager : MonoBehaviour
 
         if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
         if (mainMenuButton != null) mainMenuButton.onClick.AddListener(GoToMainMenu);
+
+        if (prevPageBtn != null) 
+        {
+            prevPageBtn.onClick.AddListener(PrevHandPage);
+            EnsureButtonAnimation(prevPageBtn);
+        }
+        if (nextPageBtn != null) 
+        {
+            nextPageBtn.onClick.AddListener(NextHandPage);
+            EnsureButtonAnimation(nextPageBtn);
+        }
 
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
@@ -294,13 +313,18 @@ public class HandManager : MonoBehaviour
 
         if (currentBattleSelection != null)
         {
+            // Disable glow on previously selected card
+            if (currentBattleSelection.glowOverlay != null)
+                currentBattleSelection.glowOverlay.SetGlowEnabled(false);
+            // Also hide legacy border just in case
             if (currentBattleSelection.selectionBorder != null)
                 currentBattleSelection.selectionBorder.SetActive(false);
         }
         currentBattleSelection = card;
-        if (currentBattleSelection.selectionBorder != null)
+        // Enable glow on newly selected card
+        if (currentBattleSelection.glowOverlay != null)
         {
-            currentBattleSelection.selectionBorder.SetActive(true);
+            currentBattleSelection.glowOverlay.SetGlowEnabled(true);
         }
     }
 
@@ -329,7 +353,9 @@ public class HandManager : MonoBehaviour
         cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         cardToPlay.transform.localRotation = Quaternion.identity;
         cardToPlay.SetLockedState(false);
-        cardToPlay.selectionBorder.SetActive(false);
+        // Disable glow when card is played
+        if (cardToPlay.glowOverlay != null) cardToPlay.glowOverlay.SetGlowEnabledImmediate(false);
+        if (cardToPlay.selectionBorder != null) cardToPlay.selectionBorder.SetActive(false);
 
         RecalculateBattleEffects();
 
@@ -574,7 +600,9 @@ public class HandManager : MonoBehaviour
                 agongPlayedThisRound = true;
 
             card.transform.SetParent(lockedHandArea);
-            card.selectionBorder.SetActive(false);
+            // Disable glow when card is locked in
+            if (card.glowOverlay != null) card.glowOverlay.SetGlowEnabledImmediate(false);
+            if (card.selectionBorder != null) card.selectionBorder.SetActive(false);
             card.SetLockedState(true);
         }
 
@@ -953,14 +981,144 @@ public class HandManager : MonoBehaviour
         else TriggerGameOver("Draw");
     }
 
-    void ReturnCardToHand(CardUI card) { card.transform.SetParent(handArea); card.transform.localRotation = Quaternion.identity; card.transform.localScale = Vector3.one; card.ResetToHandMode(); }
+    // moved logic to end of file to override
+
     void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
     void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
     void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
-    public bool ToggleCardSelection(CardUI cardUI, bool isSelected) { if (!isPlanningPhase) return false; if (isSelected) selectedCardsUI.Add(cardUI); else selectedCardsUI.Remove(cardUI); UpdateEnergyUI(); return true; }
+    public bool ToggleCardSelection(CardUI cardUI, bool isSelected) 
+    { 
+        if (!isPlanningPhase) return false; 
+        
+        if (isSelected) 
+        {
+            // Optional: Check energy limit before allowing move
+            int currentUsed = 0;
+            foreach (CardUI c in selectedCardsUI) currentUsed += GetCardCost(c);
+            if (currentUsed + GetCardCost(cardUI) > maxEnergy)
+            {
+                StartCoroutine(ShowWarningSequence());
+                return false;
+            }
+
+            selectedCardsUI.Add(cardUI);
+            cardUI.transform.SetParent(lockedHandArea);
+            cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
+            cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
+            // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
+        }
+        else 
+        {
+            selectedCardsUI.Remove(cardUI);
+            ReturnCardToHand(cardUI);
+        }
+        
+        UpdateEnergyUI(); 
+        
+        // Force layout update for the hand since a card left/entered
+        if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate();
+        
+        return true; 
+    }
     IEnumerator ShowWarningSequence() { if (warningText != null) { warningText.gameObject.SetActive(true); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, 1); yield return new WaitForSeconds(0.5f); float duration = 1.0f; float currentTime = 0f; while (currentTime < duration) { float alpha = Mathf.Lerp(1f, 0f, currentTime / duration); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, alpha); currentTime += Time.deltaTime; yield return null; } warningText.gameObject.SetActive(false); } }
     int GetCardCost(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null && display.cardData != null) return display.cardData.energyCost; if (card.costText != null && int.TryParse(card.costText.text, out int val)) return val; return 0; }
     int GetCardAttack(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null) return display.currentAttack; if (card.attackText != null && int.TryParse(card.attackText.text, out int val)) return val; return 0; }
-    void SpawnDeck() { foreach (CardData card in myDeck) { GameObject newCard = Instantiate(cardPrefab, handArea); CardUI ui = newCard.GetComponent<CardUI>(); ui.Setup(card); CardDisplay display = newCard.GetComponent<CardDisplay>(); if (display != null) { display.cardData = card; display.currentAttack = card.attackValue; } } }
+    void SpawnDeck() 
+    { 
+        foreach (CardData card in myDeck) 
+        { 
+            GameObject newCard = Instantiate(cardPrefab, handArea); 
+            CardUI ui = newCard.GetComponent<CardUI>(); 
+            ui.Setup(card); 
+            CardDisplay display = newCard.GetComponent<CardDisplay>(); 
+            if (display != null) 
+            { 
+                display.cardData = card; 
+                display.currentAttack = card.attackValue; 
+            } 
+        } 
+        UpdateHandPagination();
+    }
+
+    // --- PAGINATION LOGIC ---
+    public void UpdateHandPagination()
+    {
+        if (handArea == null) return;
+
+        int totalCards = handArea.childCount;
+        int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
+        
+        if (currentPage > maxPage) currentPage = maxPage;
+        if (currentPage < 0) currentPage = 0;
+
+        int startIndex = currentPage * cardsPerPage;
+        int endIndex = startIndex + cardsPerPage;
+
+        // Iterate through all cards in hand
+        for (int i = 0; i < totalCards; i++)
+        {
+            Transform child = handArea.GetChild(i);
+            bool shouldBeVisible = (i >= startIndex && i < endIndex);
+            child.gameObject.SetActive(shouldBeVisible);
+        }
+
+        // Update Buttons
+        if (prevPageBtn != null) prevPageBtn.interactable = (currentPage > 0);
+        if (nextPageBtn != null) nextPageBtn.interactable = (currentPage < maxPage);
+
+        // Update Text
+        if (pageIndicatorText != null)
+        {
+            pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+        }
+
+        // Force Layout Update for the visible cards
+        if (CurvedHandLayout.Instance != null) 
+        {
+            CurvedHandLayout.Instance.ForceLayoutUpdate();
+        }
+    }
+
+    void NextHandPage()
+    {
+        int totalCards = handArea.childCount;
+        int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
+        if (currentPage < maxPage)
+        {
+            currentPage++;
+            UpdateHandPagination();
+        }
+    }
+
+    void PrevHandPage()
+    {
+        if (currentPage > 0)
+        {
+            currentPage--;
+            UpdateHandPagination();
+        }
+    }
+
+    // Overwrite ReturnCardToHand to use pagination
+    void ReturnCardToHand(CardUI card) 
+    { 
+        card.transform.SetParent(handArea); 
+        card.transform.localScale = Vector3.one; 
+        card.ResetToHandMode(); 
+        
+        // Ensure the card is counted in pagination
+        UpdateHandPagination(); 
+    }
+
+    void EnsureButtonAnimation(Button btn)
+    {
+        if (btn != null)
+        {
+            if (btn.gameObject.GetComponent<UIButtonAnimation>() == null)
+            {
+                btn.gameObject.AddComponent<UIButtonAnimation>();
+            }
+        }
+    }
 }

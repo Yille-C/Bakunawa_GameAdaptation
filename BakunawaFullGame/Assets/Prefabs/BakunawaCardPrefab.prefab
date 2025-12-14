@@ -373,7 +373,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 1008233795, guid: dd5e57664a6b56340be313d016ccec5e, type: 3}
+  m_Sprite: {fileID: 739454410, guid: ecc9e0ef426c6b345bc84addf8617e2f, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -519,11 +519,16 @@ MonoBehaviour:
   costText: {fileID: 8846383303051907417}
   attackText: {fileID: 6462706511652342530}
   selectionBorder: {fileID: 4541180945689914086}
+  glowEffect: {fileID: 0}
   cardBackObject: {fileID: 6169300986534241884}
   lockedArtObject: {fileID: 1020274286349391496}
   lockedCostObject: {fileID: 0}
   lockedAttackObject: {fileID: 0}
   isEnemy: 1
+  hoverScale: 1.1
+  selectedScale: 1.1
+  selectedYOffset: 20
+  animSpeed: 15
 --- !u!114 &6813072674359202520
 MonoBehaviour:
   m_ObjectHideFlags: 0
