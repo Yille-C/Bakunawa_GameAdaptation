@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Collections;
 
 public class BakunawaAI : MonoBehaviour
 {
@@ -32,7 +33,25 @@ public class BakunawaAI : MonoBehaviour
 
     void Start()
     {
+        SetupBattleZone();
         Invoke("SpawnHand", 0.5f);
+    }
+
+    void SetupBattleZone()
+    {
+        if (battleZone != null)
+        {
+            HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
+
+            hlg.childAlignment = TextAnchor.MiddleLeft;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.padding = new RectOffset(50, 0, 0, 0);
+            hlg.spacing = 20; 
+        }
     }
 
     void SpawnHand()
@@ -127,14 +146,60 @@ public class BakunawaAI : MonoBehaviour
         CardUI cardToPlay = myLockedCards[0];
         myLockedCards.RemoveAt(0);
 
+        // Capture Start Position (World Space)
+        Vector3 startPos = cardToPlay.transform.position;
+
         cardToPlay.transform.SetParent(battleZone);
+        
+        // Setup for Animation: maintain position, ignore layout for now
+        LayoutElement le = cardToPlay.GetComponent<LayoutElement>();
+        if (le == null) le = cardToPlay.gameObject.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
+
+        // Force position to start (overriding any auto-snap)
+        cardToPlay.transform.position = startPos;
         cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
-        cardToPlay.transform.localRotation = Quaternion.identity;
+        // Keep original rotation for now, animate later
+        // cardToPlay.transform.rotation = Quaternion.identity; 
 
         cardToPlay.SetLockedState(false);
         cardToPlay.ResetToHandMode();
 
+        // Note: The caller (HandManager) handles triggering the animation coroutine
+        // to coordinate with other events (like waiting for player), 
+        // OR we can trigger a default one if needed. 
+        // For now, we leave it 'floating' at startPos with ignoreLayout=true.
+
         return cardToPlay;
+    }
+
+    public IEnumerator AnimateCurveToBoard(CardUI card, float duration = 0.5f)
+    {
+        Vector3 startPos = card.transform.position;
+        Quaternion startRot = card.transform.rotation;
+        
+        Vector3 targetPos = battleZone.position;
+        Quaternion targetRot = Quaternion.identity;
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            float t = elapsed / duration;
+            // Smooth step
+            t = t * t * (3f - 2f * t);
+
+            card.transform.position = Vector3.Lerp(startPos, targetPos, t);
+            card.transform.rotation = Quaternion.Lerp(startRot, targetRot, t);
+            
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        card.transform.position = targetPos;
+        card.transform.rotation = targetRot;
+
+        // Restore Layout
+        LayoutElement le = card.GetComponent<LayoutElement>();
+        if (le != null) le.ignoreLayout = false;
     }
 
     public void CleanupRound()

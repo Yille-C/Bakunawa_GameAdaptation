@@ -82,7 +82,9 @@ public class HandManager : MonoBehaviour
     [Header("Areas")]
     public GameObject cardPrefab;
     public Transform handArea;
-    public Transform lockedHandArea;
+    [UnityEngine.Serialization.FormerlySerializedAs("lockedHandArea")]
+    public Transform tribeSelectedPanel;
+    public Transform tribeLockedPanel;
     public Transform deckPileArea;
     public Transform battleZone;
     public Transform discardPileArea;
@@ -97,6 +99,8 @@ public class HandManager : MonoBehaviour
     public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
     public float discardScale = 0.8f;
     public float planningTime = 60f;
+    public float tribePanelSpacing = -40f; // Control spacing in the inspector
+    public float clashDuration = 0.5f;
 
     [Header("Details UI")]
     public GameObject detailsPanel;
@@ -121,6 +125,7 @@ public class HandManager : MonoBehaviour
     private List<CardUI> selectedCardsUI = new List<CardUI>();
 
     public bool isPlanningPhase = true;
+    public bool IsInputLocked => inputLocked;
     private bool inputLocked = true;
     private float currentTimer;
     private CardUI currentBattleSelection;
@@ -136,9 +141,371 @@ public class HandManager : MonoBehaviour
     public bool alayDebuffActive = false;
     public bool agongPlayedThisRound = false;
 
+    private Image clashDimmer;
+
+    // ... [Existing Awake] ...
+    // Helper for animation timing
+    float shakingTimeNorm(float ct, float dur)
+    {
+        float t = ct / dur;
+        return Mathf.Clamp01(t);
+    }
+    
     void Awake()
     {
         Instance = this;
+        EnsureDimmer();
+    }
+
+    void EnsureDimmer()
+    {
+        if (clashDimmer != null) return;
+
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
+        
+        if (rootCanvas != null)
+        {
+            GameObject dimObj = new GameObject("ClashDimmer");
+            dimObj.transform.SetParent(rootCanvas.transform, false);
+            dimObj.transform.SetAsFirstSibling(); // Put it behind most things, but we'll control draw order via card reparenting
+            
+            clashDimmer = dimObj.AddComponent<Image>();
+            clashDimmer.color = new Color(0, 0, 0, 0f); // Start transparent
+            clashDimmer.raycastTarget = false;
+            
+            // Stretch
+            RectTransform rt = dimObj.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+    }
+
+    IEnumerator FadeDimmer(bool fadeIn, float duration = 0.3f)
+    {
+        if (clashDimmer == null) EnsureDimmer();
+        if (clashDimmer == null) yield break;
+
+        // Ensure dimmer is just behind the front-most elements (like our clashing cards)
+        // Since cards are moved to LastSibling of Root, the dimmer needs to be SecondToLast? 
+        // Or just let cards pop over it. 
+        // We'll set dimmer to LastSibling first, then when cards move to root they will become LastSibling (on top of dimmer).
+        if (fadeIn) clashDimmer.transform.SetAsLastSibling();
+
+        float startAlpha = clashDimmer.color.a;
+        float targetAlpha = fadeIn ? 0.75f : 0f;
+        float elapsed = 0f;
+
+        while(elapsed < duration)
+        {
+            float t = elapsed / duration;
+            float a = Mathf.Lerp(startAlpha, targetAlpha, t);
+            clashDimmer.color = new Color(0,0,0, a);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        clashDimmer.color = new Color(0,0,0, targetAlpha);
+    }
+
+    // [Enhanced] Multi-Phase Card Clash Animation - V2 (Root Canvas Detachment)
+    IEnumerator AnimateCardClash(CardUI playerCard, CardUI enemyCard)
+    {
+        // === PHASE 0: SETUP & DETACHMENT ===
+        // Dim the background
+        StartCoroutine(FadeDimmer(true, 0.4f));
+
+        // 1. Capture Original Context
+        Transform pOriginalParent = playerCard.transform.parent;
+        Transform eOriginalParent = (enemyCard != null) ? enemyCard.transform.parent : null;
+        
+        // 2. Determine "Slot" Position in BattleZone (Where they should end up)
+        // We do this by temporarily parenting them to battleZone (if not already) and forcing a layout calc,
+        // OR we can just simple-math it if the layout is predictable.
+        // For reliability, let's assume specific "Left" and "Right" slots in the battle zone for visual clarity,
+        // or just let them return to the battleZone container at the end.
+        
+        // For the animations, we want to work in SCREEN SPACE / ROOT CANVAS SPACE to avoid layout fighting.
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
+        Transform rootT = rootCanvas.transform;
+
+        // Capture Start Positions (World Space)
+        Vector3 pStartPos = playerCard.transform.position;
+        Vector3 eStartPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+
+        // 3. Move to Root - This "frees" them from the LayoutGroup
+        playerCard.transform.SetParent(rootT, true); // worldPositionStays = true
+        if (enemyCard != null) enemyCard.transform.SetParent(rootT, true);
+
+        // Ensure they render on top
+        playerCard.transform.SetAsLastSibling();
+        if (enemyCard != null) enemyCard.transform.SetAsLastSibling();
+
+        // Standardize Scale
+        playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+
+        // Define Key Positions relative to Screen Center
+        // We use the Root Canvas as the visual center anchor for the CLASH (Screen Center)
+        Vector3 clashPoint = rootT.position; // Screen Center
+        Vector3 centerPoint = battleZone.position; // Return target reference
+
+        float verticalOffset = 350f; // Increase start distance for more drama
+        
+        Vector3 pReadyPos = clashPoint + new Vector3(0, -verticalOffset, 0);
+        Vector3 eReadyPos = clashPoint + new Vector3(0, verticalOffset, 0); // Enemy comes from top
+        if (enemyCard == null) eReadyPos = clashPoint; // Dummy target center
+
+        // === PHASE 1: WINDUP / ALIGN (0.4s) ===
+        // Move from wherever they are (Hand/Deck) to the "Ready" positions
+        float windupTime = 0.4f;
+        float elapsed = 0f;
+        
+        Quaternion pStartRot = playerCard.transform.rotation;
+        Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
+
+        // Scale Up Logic
+        Vector3 normalScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        Vector3 clashScaleVec = normalScale * 1.3f; // 30% larger for impact
+
+        while (elapsed < windupTime)
+        {
+            float t = elapsed / windupTime;
+            t = t * t * (3f - 2f * t); // SmoothStep
+
+            playerCard.transform.position = Vector3.Lerp(pStartPos, pReadyPos, t);
+            playerCard.transform.rotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
+            playerCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
+
+            if (enemyCard != null)
+            {
+                enemyCard.transform.position = Vector3.Lerp(eStartPos, eReadyPos, t);
+                enemyCard.transform.rotation = Quaternion.Lerp(eStartRot, Quaternion.identity, t);
+                enemyCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        playerCard.transform.localScale = clashScaleVec;
+        if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
+
+        // === PHASE 2: ANTICIPATION (0.15s) ===
+        // Brief pause/pull back before strike
+        yield return new WaitForSeconds(0.1f);
+        
+        // === PHASE 3: LUNGE (0.15s) ===
+        // Smash together!
+        float lungeTime = 0.15f;
+        elapsed = 0f;
+        
+        // Remove Tilt as requested - keep them straight
+        Quaternion pTilt = Quaternion.identity; 
+        Quaternion eTilt = Quaternion.identity;
+
+        // Dynamic Height Calculation to prevent overlap
+        float actualHeight = 250f; // Default fallback
+        RectTransform pRect = playerCard.GetComponent<RectTransform>();
+        if (pRect != null) actualHeight = pRect.rect.height * clashScaleVec.y;
+
+        float cardHalfHeight = actualHeight / 2f;
+        
+        float collisionGap = 0f; 
+        float offset = cardHalfHeight + collisionGap;
+
+        Vector3 pImpactPos = clashPoint + new Vector3(0, -offset, 0);
+        Vector3 eImpactPos = clashPoint + new Vector3(0, offset, 0);
+
+        // STRETCH VECTORS (Elongate on Y, thin on X)
+        // Apply relative to the current clashScaleVec
+        Vector3 stretchScale = new Vector3(clashScaleVec.x * 0.8f, clashScaleVec.y * 1.2f, clashScaleVec.z);
+
+        while (elapsed < lungeTime)
+        {
+            float t = elapsed / lungeTime;
+            t = t * t * t; // Cubic Ease In (Exciting!)
+
+            playerCard.transform.position = Vector3.Lerp(pReadyPos, pImpactPos, t);
+            
+            // Apply STRETCH as velocity increases
+            // Max stretch at t=1
+            playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
+
+            if (enemyCard != null)
+            {
+                enemyCard.transform.position = Vector3.Lerp(eReadyPos, eImpactPos, t);
+                enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Snap to final collision position
+        playerCard.transform.position = pImpactPos;
+        if (enemyCard != null) enemyCard.transform.position = eImpactPos;
+
+
+        // === PHASE 4: IMPACT (One Frame + Shake) ===
+        // Visuals
+        playerCard.SetBroken(true);
+        if (enemyCard != null) enemyCard.SetBroken(true);
+
+        // Screen Shake & IMPACT PUNCH
+        Vector3 camOriginalPos = Camera.main.transform.position;
+        float shakeDuration = 0.25f; // Slightly longer
+        float shakeMagnitude = 15f; // Impactful jitter
+        float shakeTimer = 0f;
+        
+        // Start Recoil concurrently with shake
+        float recoilTime = 0.3f;
+        Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
+        Vector3 eRecoilPos = eImpactPos + new Vector3(0, 50f, 0);
+
+        // SQUASH TARGET (Flatten on Y, widen on X)
+        // This replaces the simple scale punch. We squash HARD then spring back.
+        Vector3 squashScale = new Vector3(clashScaleVec.x * 1.3f, clashScaleVec.y * 0.7f, clashScaleVec.z);
+        Vector3 overshootScale = new Vector3(clashScaleVec.x * 0.9f, clashScaleVec.y * 1.1f, clashScaleVec.z); // Spring effect
+
+        while (shakeTimer < recoilTime) // Loop for length of recoil
+        {
+            float t = shakeTimer / recoilTime;
+            t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out Recoil
+
+            // Baset Recoil Position
+            Vector3 currentRecoilP = Vector3.Lerp(pImpactPos, pRecoilPos, t);
+            Vector3 currentRecoilE = Vector3.Lerp(eImpactPos, eRecoilPos, t);
+
+            // ADD VIOLENT SHAKE (Jitter)
+            if (shakeTimer < shakeDuration)
+            {
+               float strength = 1f - (shakeTimer / shakeDuration);
+               Vector3 cardJitter = (Vector3)(Random.insideUnitCircle * shakeMagnitude * strength);
+               
+               playerCard.transform.position = currentRecoilP + cardJitter;
+               if (enemyCard != null) enemyCard.transform.position = currentRecoilE + cardJitter;
+
+               // SQUASH AND STRETCH DECAY LOGIC
+               // 0.0 -> 0.1 : Squash
+               // 0.1 -> 0.3 : Overshoot (Stretch)
+               // 0.3 -> 1.0 : Return to Normal
+               
+               float scalePhase = shakingTimeNorm(shakeTimer, 0.25f); // localized t
+               Vector3 currentScale = clashScaleVec;
+
+               if (scalePhase < 0.3f)
+               {
+                   currentScale = Vector3.Lerp(squashScale, overshootScale, scalePhase / 0.3f);
+               }
+               else
+               {
+                   currentScale = Vector3.Lerp(overshootScale, clashScaleVec, (scalePhase - 0.3f) / 0.7f);
+               }
+
+               playerCard.transform.localScale = currentScale;
+               if (enemyCard != null) enemyCard.transform.localScale = currentScale;
+            }
+            else 
+            {
+               playerCard.transform.position = currentRecoilP;
+               if (enemyCard != null) enemyCard.transform.position = currentRecoilE;
+               
+               playerCard.transform.localScale = clashScaleVec;
+               if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
+            }
+
+            shakeTimer += Time.deltaTime;
+            yield return null;
+        }
+        Camera.main.transform.position = camOriginalPos; // Ensure reset
+
+        // === PHASE 5: RETURN TO BOARD (0.4s) ===
+        // Undim background
+        StartCoroutine(FadeDimmer(false, 0.4f));
+
+        // Return cards to their specific zones (Player Zone / Enemy Zone)
+        
+        if (pOriginalParent != null) playerCard.transform.SetParent(pOriginalParent, true);
+        else playerCard.transform.SetParent(battleZone, true); // Fallback
+
+        if (enemyCard != null)
+        {
+            if (eOriginalParent != null) enemyCard.transform.SetParent(eOriginalParent, true);
+            else enemyCard.transform.SetParent(battleZone, true); // Fallback
+        }
+
+        // We need to know where the LayoutGroup *validly* wants them.
+        
+        LayoutElement pLe = playerCard.GetComponent<LayoutElement>();
+        if (pLe == null) pLe = playerCard.gameObject.AddComponent<LayoutElement>();
+        
+        LayoutElement eLe = (enemyCard != null) ? enemyCard.GetComponent<LayoutElement>() : null;
+
+        // Enable layout momentarily to calculate slot
+        pLe.ignoreLayout = false;
+        if (eLe != null) eLe.ignoreLayout = false;
+        
+        // Force Rebuild on correct parents
+        if (playerCard.transform.parent != null) 
+            LayoutRebuilder.ForceRebuildLayoutImmediate(playerCard.transform.parent as RectTransform);
+            
+        if (enemyCard != null && enemyCard.transform.parent != null && enemyCard.transform.parent != playerCard.transform.parent)
+             LayoutRebuilder.ForceRebuildLayoutImmediate(enemyCard.transform.parent as RectTransform);
+        
+        // Capture Target Positions
+        Vector3 pFinalPos = playerCard.transform.position;
+        Vector3 eFinalPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+
+        // Reset to Recoil pos to start return flight
+        // Requires disabling layout again so we can move them freely
+        pLe.ignoreLayout = true;
+        if (eLe != null) eLe.ignoreLayout = true;
+        
+        playerCard.transform.position = pRecoilPos;
+        if (enemyCard != null) enemyCard.transform.position = eRecoilPos;
+        
+        // Fly Home
+        float returnTime = 0.4f;
+        elapsed = 0f;
+        
+        Quaternion pRecoilRot = playerCard.transform.rotation; 
+        Quaternion eRecoilRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
+
+        while(elapsed < returnTime)
+        {
+            float t = elapsed / returnTime;
+            t = t * t * (3f - 2f * t);
+
+            playerCard.transform.position = Vector3.Lerp(pRecoilPos, pFinalPos, t);
+            playerCard.transform.rotation = Quaternion.Lerp(pRecoilRot, Quaternion.identity, t);
+            // Scale Back Down
+            playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
+            
+            if (enemyCard != null)
+            {
+                 enemyCard.transform.position = Vector3.Lerp(eRecoilPos, eFinalPos, t);
+                 enemyCard.transform.rotation = Quaternion.Lerp(eRecoilRot, Quaternion.identity, t);
+                 enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // === CLEANUP ===
+        // Restore final positions and re-enable layout
+        playerCard.transform.position = pFinalPos;
+        playerCard.transform.rotation = Quaternion.identity;
+        playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        pLe.ignoreLayout = false;
+
+        if (enemyCard != null)
+        {
+            enemyCard.transform.position = eFinalPos;
+            enemyCard.transform.rotation = Quaternion.identity;
+            enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+            eLe.ignoreLayout = false;
+        }
     }
 
     void Start()
@@ -186,6 +553,47 @@ public class HandManager : MonoBehaviour
 
         roundNumber = 1;
         UpdateRoundUI();
+
+        if (tribeSelectedPanel != null)
+        {
+            HorizontalLayoutGroup hlg = tribeSelectedPanel.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = tribeSelectedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            // Always apply settings to ensure spacing is correct
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.spacing = tribePanelSpacing; 
+        }
+
+        if (tribeLockedPanel != null)
+        {
+            HorizontalLayoutGroup hlg = tribeLockedPanel.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = tribeLockedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.spacing = tribePanelSpacing; 
+        }
+
+        if (battleZone != null)
+        {
+            HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            hlg.childAlignment = TextAnchor.MiddleLeft;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.padding = new RectOffset(50, 0, 0, 0);
+            hlg.spacing = 20; // Nice gap for played cards
+        }
 
         SpawnDeck();
         StartCoroutine(StartPlanningPhaseSequence());
@@ -337,6 +745,7 @@ public class HandManager : MonoBehaviour
     IEnumerator PlayPlayerCardSequence(CardUI cardToPlay)
     {
         playCardButton.interactable = false;
+        inputLocked = true; // Lock immediately
 
         CardDisplay display = cardToPlay.GetComponent<CardDisplay>();
         if (display != null && display.cardData != null && display.cardData.effectID == "sup_alay")
@@ -561,6 +970,7 @@ public class HandManager : MonoBehaviour
         inputLocked = false;
         SetEnergyUIActive(true);
         UpdateEnergyUI();
+        UpdateHandPagination();
     }
 
     IEnumerator FadeTextInAndOut(Text textObj, float displayDuration)
@@ -592,6 +1002,7 @@ public class HandManager : MonoBehaviour
         lockInButton.gameObject.SetActive(false);
         if (timerText != null) timerText.text = "";
         SetEnergyUIActive(false);
+        UpdateHandPagination();
 
         foreach (CardUI card in selectedCardsUI)
         {
@@ -599,7 +1010,7 @@ public class HandManager : MonoBehaviour
             if (display != null && display.cardData != null && display.cardData.effectID == "def_agong")
                 agongPlayedThisRound = true;
 
-            card.transform.SetParent(lockedHandArea);
+            card.transform.SetParent(tribeLockedPanel);
             // Disable glow when card is locked in
             if (card.glowOverlay != null) card.glowOverlay.SetGlowEnabledImmediate(false);
             if (card.selectionBorder != null) card.selectionBorder.SetActive(false);
@@ -688,7 +1099,7 @@ public class HandManager : MonoBehaviour
 
     void ProcessBakunawaTurnDecision()
     {
-        int playerCards = lockedHandArea.childCount;
+        int playerCards = tribeLockedPanel.childCount;
         int enemyCards = 0;
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.lockedArea != null)
             enemyCards = BakunawaAI.Instance.lockedArea.childCount;
@@ -739,11 +1150,26 @@ public class HandManager : MonoBehaviour
         StartBattlePhase();
     }
 
+    public bool TryPlayCard(CardUI card)
+    {
+        // Check if we are allowed to play
+        if (inputLocked) return false;
+        if (!playerGoesFirst && !playCardButton.interactable) return false; // Not our turn
+        if (playCardButton.gameObject.activeSelf && !playCardButton.interactable) return false; // General lock
+
+        // Check if it's actually our turn logic (simplified by reusing button interactable state)
+        // If button is hidden, we use 'playCardButton.interactable' state as the logical flag
+        if (!playCardButton.interactable) return false;
+
+        StartCoroutine(PlayPlayerCardSequence(card));
+        return true;
+    }
+
     void StartBattlePhase()
     {
         inputLocked = false;
 
-        if (lockedHandArea.childCount == 0)
+        if (tribeLockedPanel.childCount == 0)
         {
             playCardButton.gameObject.SetActive(false);
             StartCoroutine(BakunawaSoloPlaySequence());
@@ -754,12 +1180,17 @@ public class HandManager : MonoBehaviour
         {
             enemyHasPlayedPendingCard = false;
             pendingEnemyCard = null;
-            playCardButton.gameObject.SetActive(true);
+            // HIDDEN: Using Drag instead
+            playCardButton.gameObject.SetActive(false); 
             playCardButton.interactable = true;
         }
         else
         {
-            playCardButton.gameObject.SetActive(true);
+            // Lock Input as Enemy plays first
+            inputLocked = true;
+            
+            // HIDDEN: Using Drag instead
+            playCardButton.gameObject.SetActive(false);
             playCardButton.interactable = false;
             StartCoroutine(EnemyPlaysFirstRoutine());
         }
@@ -772,12 +1203,20 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             pendingEnemyCard = BakunawaAI.Instance.PlayCard();
+            
+            // Animate card dragging to board
+            yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(pendingEnemyCard));
+            
             enemyHasPlayedPendingCard = true;
             RecalculateBattleEffects();
+            
+            // Allow Player Action
+            inputLocked = false;
             playCardButton.interactable = true;
         }
         else
         {
+            inputLocked = false;
             playCardButton.interactable = true;
         }
     }
@@ -789,7 +1228,10 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            RecalculateBattleEffects();
+            RecalculateBattleEffects(); // This puts card in battleZone and updates state
+
+            // NEW: Animate Clash
+            yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
             if (ScoreManager.Instance != null)
             {
@@ -800,6 +1242,10 @@ public class HandManager : MonoBehaviour
         }
         else
         {
+             // Direct Attack (No enemy card)
+             // Animate just Player Card hitting 'something'
+             yield return StartCoroutine(AnimateCardClash(playerCard, null));
+
             if (ScoreManager.Instance != null)
             {
                 int pAtk = GetCardAttack(playerCard);
@@ -813,8 +1259,12 @@ public class HandManager : MonoBehaviour
 
     IEnumerator ResolveImmediateClash(CardUI playerCard, CardUI enemyCard)
     {
-        yield return new WaitForSeconds(0.5f);
+        // OLD: yield return new WaitForSeconds(0.5f);
+        
+        // NEW: Animate Clash
+        yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
+        // Score Resolution happens AFTER clash
         int pAtk = GetCardAttack(playerCard);
         int eAtk = (enemyCard != null) ? GetCardAttack(enemyCard) : 0;
 
@@ -827,7 +1277,7 @@ public class HandManager : MonoBehaviour
 
         if (!playerGoesFirst)
         {
-            if (lockedHandArea.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
+            if (tribeLockedPanel.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
             else ContinueBattleLoop();
         }
         else
@@ -838,12 +1288,14 @@ public class HandManager : MonoBehaviour
 
     void ContinueBattleLoop()
     {
-        if (lockedHandArea.childCount > 0)
+        if (tribeLockedPanel.childCount > 0)
         {
+            inputLocked = false;
             playCardButton.interactable = true;
         }
         else
         {
+            // Lock logic handled by next routines or EndRound
             if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
                 StartCoroutine(BakunawaSoloPlaySequence());
             else
@@ -1003,7 +1455,7 @@ public class HandManager : MonoBehaviour
             }
 
             selectedCardsUI.Add(cardUI);
-            cardUI.transform.SetParent(lockedHandArea);
+            cardUI.transform.SetParent(tribeSelectedPanel);
             cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
             cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
             // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
@@ -1064,13 +1516,27 @@ public class HandManager : MonoBehaviour
         }
 
         // Update Buttons
-        if (prevPageBtn != null) prevPageBtn.interactable = (currentPage > 0);
-        if (nextPageBtn != null) nextPageBtn.interactable = (currentPage < maxPage);
+        bool showPagination = isPlanningPhase;
+
+        if (prevPageBtn != null)
+        {
+            prevPageBtn.gameObject.SetActive(showPagination);
+            if (showPagination) prevPageBtn.interactable = (currentPage > 0);
+        }
+        if (nextPageBtn != null)
+        {
+            nextPageBtn.gameObject.SetActive(showPagination);
+            if (showPagination) nextPageBtn.interactable = (currentPage < maxPage);
+        }
 
         // Update Text
         if (pageIndicatorText != null)
         {
-            pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+            pageIndicatorText.gameObject.SetActive(showPagination);
+            if (showPagination)
+            {
+                pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+            }
         }
 
         // Force Layout Update for the visible cards
