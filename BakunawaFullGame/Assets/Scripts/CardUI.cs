@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
-public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler
+public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("UI References")]
     public Image cardFrameImage;
@@ -40,8 +40,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     // Internal Animation State
     private Vector3 baseScale;
     private bool isHovered = false;
-    public bool IsHovered => isHovered; // Public property for CurvedHandLayout
-    public bool IsSelected { get; private set; } = false; // Public property for read access logic
+    public bool IsHovered => isHovered; 
+    public bool IsSelected { get; private set; } = false; 
 
     // Sorting Components
     private Canvas _canvas;
@@ -53,9 +53,16 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     private bool detailsShown = false;
     private float holdTimeNeeded = 0.5f;
 
+    // Drag State
+    private Transform originalParent;
+    private int originalSiblingIndex;
+    private CanvasGroup dragCanvasGroup;
+    private LayoutElement layoutElement;
+
     // STATE FLAGS
     private bool isLocked = false;
-    private bool isDeckMode = false; // Used to prevent clicking without disabling script
+    private bool isDeckMode = false;
+    private bool isDragging = false;
 
     public void Setup(CardData cardData)
     {
@@ -198,6 +205,83 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         }
     }
 
+    // --- Drag Implementation ---
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        if (HandManager.Instance == null) return;
+        if (transform.parent != HandManager.Instance.tribeLockedPanel) return;
+        if (isEnemy || isDeckMode) return;
+
+        // Check if we can even play right now (using HandManager check)
+        // HandManager controls the flow, but we can pre-check
+        // This prevents picking up cards when it's not our turn
+        // We can access 'playCardButton.interactable' indirectly or just try. 
+        // Better yet, just allow drag, and fail on drop if invalid.
+        // But for UX, maybe don't allow drag if locked.
+        // HandManager doesn't expose a simple "IsMyTurn" bool publicly other than button interactable.
+        // We will allow drag for now and fail on drop for feedback, OR check button.
+        // Let's assume valid drag only if technically possible.
+
+        isDragging = true;
+        isPressed = false; // CANCEL HOLD LOGIC
+        originalParent = transform.parent;
+        originalSiblingIndex = transform.GetSiblingIndex();
+
+        layoutElement = GetComponent<LayoutElement>();
+        if (layoutElement != null) layoutElement.ignoreLayout = true;
+
+        // Parent to root canvas so it floats above everything
+        Canvas rootCanvas = GetComponentInParent<Canvas>().rootCanvas;
+        transform.SetParent(rootCanvas.transform);
+
+        // Canvas Group for raycast passthrough
+        dragCanvasGroup = GetComponent<CanvasGroup>();
+        if (dragCanvasGroup == null) dragCanvasGroup = gameObject.AddComponent<CanvasGroup>();
+        dragCanvasGroup.blocksRaycasts = false;
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (!isDragging) return;
+        transform.position = eventData.position;
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (!isDragging) return;
+        isDragging = false;
+
+        // Restore layout behavior immediately so it can be caught by LayoutGroups (BattleZone or Hand)
+        if (layoutElement != null) layoutElement.ignoreLayout = false;
+
+        if (dragCanvasGroup != null) dragCanvasGroup.blocksRaycasts = true;
+
+        // Check if dropped on BattleZone
+        bool success = false;
+        if (HandManager.Instance != null && HandManager.Instance.battleZone != null)
+        {
+            RectTransform battleRect = HandManager.Instance.battleZone.GetComponent<RectTransform>();
+            if (RectTransformUtility.RectangleContainsScreenPoint(battleRect, eventData.position, eventData.pressEventCamera))
+            {
+                // Dropped in zone! Try to play.
+                if (HandManager.Instance.TryPlayCard(this))
+                {
+                    success = true;
+                }
+            }
+        }
+
+        if (!success)
+        {
+            // Return to hand
+            transform.SetParent(originalParent);
+            transform.SetSiblingIndex(originalSiblingIndex);
+            
+            // Reset position/scale local logic will handle in Update()
+        }
+    }
+
     // --- Hover Handling ---
     public void OnPointerEnter(PointerEventData eventData)
     {
@@ -231,7 +315,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         }
 
         // Only process click if it wasn't a long hold
-        if (pressTimer < holdTimeNeeded)
+        if (pressTimer < holdTimeNeeded && !isDragging)
         {
             if (HandManager.Instance == null) return;
 
@@ -265,7 +349,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             {
                 if (isLocked)
                 {
-                    HandManager.Instance.SelectCardForBattle(this);
+                    // No longer select on click in battle phase if locked - Drag is used
+                    // HandManager.Instance.SelectCardForBattle(this);
                 }
             }
         }
@@ -274,7 +359,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     void Update()
     {
         // HOLD LOGIC
-        if (isPressed && !detailsShown)
+        if (isPressed && !detailsShown && !isDragging)
         {
             pressTimer += Time.deltaTime;
 
@@ -300,7 +385,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (_canvas == null) return;
         
         bool isInLockedArea = false;
-        if (HandManager.Instance != null && (transform.parent == HandManager.Instance.tribeSelectedPanel || transform.parent == HandManager.Instance.tribeLockedPanel))
+        if (HandManager.Instance != null && (transform.parent == HandManager.Instance.tribeSelectedPanel || transform.parent == HandManager.Instance.tribeLockedPanel || transform.parent == HandManager.Instance.battleZone))
             isInLockedArea = true;
 
         // If in locked area, we DO NOT want to pop on top of the hand.
@@ -337,8 +422,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Skip animation for handArea - CurvedHandLayout handles that
         if (p == HandManager.Instance.handArea) return;
         
-        // Only animate in tribeSelectedPanel or tribeLockedPanel
-        if (p != HandManager.Instance.tribeSelectedPanel && p != HandManager.Instance.tribeLockedPanel) return;
+        // Only animate in tribeSelectedPanel, tribeLockedPanel OR battleZone
+        if (p != HandManager.Instance.tribeSelectedPanel && p != HandManager.Instance.tribeLockedPanel && p != HandManager.Instance.battleZone) return;
 
         // Calculate Target Scale & Position for locked hand area
         Vector3 targetScaleVec = baseScale;
@@ -352,6 +437,13 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             targetY = 0f;
             
             // Apply straight to local vars to animate logic below
+        }
+        else if (p == HandManager.Instance.battleZone)
+        {
+             // Battle Zone Logic: Scale to 'playCardScale' or 1.0
+             float scale = (HandManager.Instance != null) ? HandManager.Instance.playCardScale : 1f;
+             targetScaleVec = baseScale * scale;
+             targetY = 0f;
         }
         else if (isLocked)
         {

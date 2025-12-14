@@ -217,6 +217,19 @@ public class HandManager : MonoBehaviour
             hlg.spacing = tribePanelSpacing; 
         }
 
+        if (battleZone != null)
+        {
+            HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.spacing = 20; // Nice gap for played cards
+        }
+
         SpawnDeck();
         StartCoroutine(StartPlanningPhaseSequence());
     }
@@ -771,6 +784,21 @@ public class HandManager : MonoBehaviour
         StartBattlePhase();
     }
 
+    public bool TryPlayCard(CardUI card)
+    {
+        // Check if we are allowed to play
+        if (inputLocked) return false;
+        if (!playerGoesFirst && !playCardButton.interactable) return false; // Not our turn
+        if (playCardButton.gameObject.activeSelf && !playCardButton.interactable) return false; // General lock
+
+        // Check if it's actually our turn logic (simplified by reusing button interactable state)
+        // If button is hidden, we use 'playCardButton.interactable' state as the logical flag
+        if (!playCardButton.interactable) return false;
+
+        StartCoroutine(PlayPlayerCardSequence(card));
+        return true;
+    }
+
     void StartBattlePhase()
     {
         inputLocked = false;
@@ -786,12 +814,14 @@ public class HandManager : MonoBehaviour
         {
             enemyHasPlayedPendingCard = false;
             pendingEnemyCard = null;
-            playCardButton.gameObject.SetActive(true);
+            // HIDDEN: Using Drag instead
+            playCardButton.gameObject.SetActive(false); 
             playCardButton.interactable = true;
         }
         else
         {
-            playCardButton.gameObject.SetActive(true);
+            // HIDDEN: Using Drag instead
+            playCardButton.gameObject.SetActive(false);
             playCardButton.interactable = false;
             StartCoroutine(EnemyPlaysFirstRoutine());
         }
