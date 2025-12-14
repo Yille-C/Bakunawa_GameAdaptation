@@ -555,6 +555,7 @@ MonoBehaviour:
   playCardButton: {fileID: 1256848331}
   timerText: {fileID: 1893149603}
   playCardScale: 0.7
+  lockedScale: 0.6
   discardScale: 0.6
   planningTime: 61
   detailsPanel: {fileID: 247874080}
@@ -4013,7 +4014,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 30}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -351, y: -433}
+  m_AnchoredPosition: {x: -454, y: -404}
   m_SizeDelta: {x: 120, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1042002698
@@ -4607,7 +4608,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0.000034332, y: -255.54}
+  m_AnchoredPosition: {x: -5.5877, y: -150.68}
   m_SizeDelta: {x: 1204.4816, y: 219.93}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1182479340
@@ -6566,12 +6567,13 @@ MonoBehaviour:
   cardsBeforeMinSpacing: 8
   animationSpeed: 12
   staggerDelay: 0.05
-  hoverLift: 300
-  selectedLift: 80
-  hoverScale: 1.1
+  hoverLift: 540
+  selectedLift: 100
+  hoverScale: 2.5
   selectedScale: 1.15
   baseZPosition: 0
   zSpacing: -1
+  hoverSeparation: 290
 --- !u!1 &1633070470
 GameObject:
   m_ObjectHideFlags: 0
@@ -7189,7 +7191,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: -30}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 347, y: -433}
+  m_AnchoredPosition: {x: 459, y: -405}
   m_SizeDelta: {x: 120, y: 120}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1718732913
@@ -8593,8 +8595,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0.000030518, y: 0.00085258}
-  m_SizeDelta: {x: 1920, y: 1015.9}
+  m_AnchoredPosition: {x: 0.000030518, y: 4.464}
+  m_SizeDelta: {x: 1920, y: 1071}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2008359679
 MonoBehaviour:

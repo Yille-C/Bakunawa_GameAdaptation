@@ -94,6 +94,7 @@ public class HandManager : MonoBehaviour
 
     [Header("Settings")]
     public float playCardScale = 1.2f;
+    public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
     public float discardScale = 0.8f;
     public float planningTime = 60f;
 
@@ -986,7 +987,40 @@ public class HandManager : MonoBehaviour
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
     void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
     void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
-    public bool ToggleCardSelection(CardUI cardUI, bool isSelected) { if (!isPlanningPhase) return false; if (isSelected) selectedCardsUI.Add(cardUI); else selectedCardsUI.Remove(cardUI); UpdateEnergyUI(); return true; }
+    public bool ToggleCardSelection(CardUI cardUI, bool isSelected) 
+    { 
+        if (!isPlanningPhase) return false; 
+        
+        if (isSelected) 
+        {
+            // Optional: Check energy limit before allowing move
+            int currentUsed = 0;
+            foreach (CardUI c in selectedCardsUI) currentUsed += GetCardCost(c);
+            if (currentUsed + GetCardCost(cardUI) > maxEnergy)
+            {
+                StartCoroutine(ShowWarningSequence());
+                return false;
+            }
+
+            selectedCardsUI.Add(cardUI);
+            cardUI.transform.SetParent(lockedHandArea);
+            cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
+            cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
+            // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
+        }
+        else 
+        {
+            selectedCardsUI.Remove(cardUI);
+            ReturnCardToHand(cardUI);
+        }
+        
+        UpdateEnergyUI(); 
+        
+        // Force layout update for the hand since a card left/entered
+        if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate();
+        
+        return true; 
+    }
     IEnumerator ShowWarningSequence() { if (warningText != null) { warningText.gameObject.SetActive(true); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, 1); yield return new WaitForSeconds(0.5f); float duration = 1.0f; float currentTime = 0f; while (currentTime < duration) { float alpha = Mathf.Lerp(1f, 0f, currentTime / duration); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, alpha); currentTime += Time.deltaTime; yield return null; } warningText.gameObject.SetActive(false); } }
     int GetCardCost(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null && display.cardData != null) return display.cardData.energyCost; if (card.costText != null && int.TryParse(card.costText.text, out int val)) return val; return 0; }
     int GetCardAttack(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null) return display.currentAttack; if (card.attackText != null && int.TryParse(card.attackText.text, out int val)) return val; return 0; }

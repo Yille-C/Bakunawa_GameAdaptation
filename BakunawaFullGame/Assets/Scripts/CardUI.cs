@@ -156,7 +156,46 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (glowOverlay != null) glowOverlay.SetGlowEnabledImmediate(false);
         IsSelected = false; // Reset internal state
         
+        // Reset Layout Element so it doesn't interfere with Hand Layout
+        LayoutElement le = GetComponent<LayoutElement>();
+        if (le != null) le.ignoreLayout = true;
+
+        // Disable Shadow
+        if (cardFrameImage != null)
+        {
+            Shadow shadow = cardFrameImage.GetComponent<Shadow>();
+            if (shadow != null) shadow.enabled = false;
+        }
+
         SetVisualsVisible(true);
+    }
+
+    public void UpdateLockedLayout()
+    {
+        // When in locked area, we want the Layout Group to treat this card as smaller
+        // to match its visual scale (lockedScale).
+        LayoutElement le = GetComponent<LayoutElement>();
+        if (le == null) le = gameObject.AddComponent<LayoutElement>();
+        
+        RectTransform rt = GetComponent<RectTransform>();
+        if (rt != null && HandManager.Instance != null)
+        {
+             float s = HandManager.Instance.lockedScale;
+             le.preferredWidth = rt.rect.width * s;
+             le.preferredHeight = rt.rect.height * s;
+             le.ignoreLayout = false;
+        }
+
+        // Add Shadow for grounded feel
+        if (cardFrameImage != null)
+        {
+            Shadow shadow = cardFrameImage.GetComponent<Shadow>();
+            if (shadow == null) shadow = cardFrameImage.gameObject.AddComponent<Shadow>();
+            
+            shadow.effectColor = new Color(0, 0, 0, 0.4f);
+            shadow.effectDistance = new Vector2(4, -4); // Subtle drop shadow
+            shadow.enabled = true;
+        }
     }
 
     // --- Hover Handling ---
@@ -259,14 +298,28 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     void UpdateSorting()
     {
         if (_canvas == null) return;
+        
+        bool isInLockedArea = false;
+        if (HandManager.Instance != null && transform.parent == HandManager.Instance.lockedHandArea)
+            isInLockedArea = true;
 
-        // If hovered or selected, render on top of others
+        // If in locked area, we DO NOT want to pop on top of the hand.
+        // The hand cards (when hovered) should be on top.
+        if (isInLockedArea)
+        {
+             _canvas.overrideSorting = false;
+             return; 
+        }
+
+        // If hovered or selected (and NOT in locked area), render on top of others
         bool shouldPop = (isHovered || IsSelected) && !isLocked && !isEnemy && !isDeckMode;
 
         if (shouldPop)
         {
             _canvas.overrideSorting = true;
-            // Selected cards slightly higher than just hovered ones
+            // Selected cards slightly higher than just hovered ones (if both in hand?)
+            // But if it's selected, it usually goes to locked area. 
+            // In case a selected card is still in hand (animating), keep it high.
             _canvas.sortingOrder = IsSelected ? 21 : 20; 
         }
         else
@@ -291,9 +344,18 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         Vector3 targetScaleVec = baseScale;
         float targetY = 0f;
 
-        if (isLocked)
+        if (p == HandManager.Instance.lockedHandArea)
         {
-            // Keep locked cards at base state
+            // NEW LOGIC: Use specific scale for locked cards and sit flat in the panel
+            float scale = (HandManager.Instance != null) ? HandManager.Instance.lockedScale : 1f;
+            targetScaleVec = baseScale * scale;
+            targetY = 0f;
+            
+            // Apply straight to local vars to animate logic below
+        }
+        else if (isLocked)
+        {
+            // Keep locked cards at base state (if somewhere else?)
         }
         else if (isEnemy || isDeckMode)
         {
