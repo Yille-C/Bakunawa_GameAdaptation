@@ -466,11 +466,12 @@ public class HandManager : MonoBehaviour
             HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
             if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
             
-            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childAlignment = TextAnchor.MiddleLeft;
             hlg.childControlWidth = false;
             hlg.childControlHeight = false;
             hlg.childForceExpandWidth = false;
             hlg.childForceExpandHeight = false;
+            hlg.padding = new RectOffset(50, 0, 0, 0);
             hlg.spacing = 20; // Nice gap for played cards
         }
 

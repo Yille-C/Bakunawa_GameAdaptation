@@ -33,7 +33,25 @@ public class BakunawaAI : MonoBehaviour
 
     void Start()
     {
+        SetupBattleZone();
         Invoke("SpawnHand", 0.5f);
+    }
+
+    void SetupBattleZone()
+    {
+        if (battleZone != null)
+        {
+            HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
+
+            hlg.childAlignment = TextAnchor.MiddleLeft;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.padding = new RectOffset(50, 0, 0, 0);
+            hlg.spacing = 20; 
+        }
     }
 
     void SpawnHand()
