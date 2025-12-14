@@ -358,6 +358,9 @@ public class HandManager : MonoBehaviour
         float shakeMagnitude = 15f; // Impactful jitter
         float shakeTimer = 0f;
         
+        // SPAWN SPARKS
+        CreateImpactSparks(clashPoint);
+
         // Start Recoil concurrently with shake
         float recoilTime = 0.3f;
         Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
@@ -1586,5 +1589,88 @@ public class HandManager : MonoBehaviour
                 btn.gameObject.AddComponent<UIButtonAnimation>();
             }
         }
+    }
+    void CreateImpactSparks(Vector3 pos)
+    {
+        // 1. Container
+        GameObject container = new GameObject("SparkContainer");
+        container.transform.position = pos;
+        
+        Canvas root = GetComponentInParent<Canvas>();
+        if (root != null && root.rootCanvas != null) root = root.rootCanvas;
+        if (root != null) container.transform.SetParent(root.transform);
+        else container.transform.SetParent(transform);
+        
+        container.transform.localScale = Vector3.one;
+        container.transform.SetAsLastSibling(); // Top of everything
+
+        // 2. Spawn Sprites
+        int sparkCount = 20;
+        List<RectTransform> sparks = new List<RectTransform>();
+        List<Vector2> velocities = new List<Vector2>();
+
+        for(int i=0; i<sparkCount; i++)
+        {
+            GameObject s = new GameObject("Spark");
+            s.transform.SetParent(container.transform);
+            s.transform.position = pos; // Start at center
+            s.transform.localScale = Vector3.one;
+            
+            Image img = s.AddComponent<Image>();
+            // Gold / bright orange / white mix
+            float rVal = Random.value;
+            if (rVal > 0.6f) img.color = new Color(1f, 0.9f, 0.4f); // Pale Gold
+            else if (rVal > 0.3f) img.color = new Color(1f, 0.6f, 0.1f); // Orange
+            else img.color = Color.white; // Sparkle center
+            
+            // Random direction
+            Vector2 dir = Random.insideUnitCircle.normalized;
+            float speed = Random.Range(300f, 800f); // High speed for screen space
+            velocities.Add(dir * speed);
+
+            RectTransform rt = s.GetComponent<RectTransform>();
+            float size = Random.Range(10f, 30f);
+            rt.sizeDelta = new Vector2(size, size);
+            sparks.Add(rt);
+        }
+
+        StartCoroutine(AnimateUIExplosion(container, sparks, velocities));
+    }
+
+    IEnumerator AnimateUIExplosion(GameObject container, List<RectTransform> sparks, List<Vector2> velocities)
+    {
+        float duration = 0.5f;
+        float elapsed = 0f;
+
+        while(elapsed < duration && container != null)
+        {
+            float t = elapsed / duration;
+            for(int i=0; i<sparks.Count; i++)
+            {
+                if(sparks[i] == null) continue;
+                
+                // Move
+                sparks[i].anchoredPosition += velocities[i] * Time.deltaTime;
+                
+                // Slow down (Drag)
+                velocities[i] = Vector2.Lerp(velocities[i], Vector2.zero, Time.deltaTime * 5f);
+                
+                // Find Image to Fade
+                Image img = sparks[i].GetComponent<Image>();
+                if (img != null)
+                {
+                    Color c = img.color;
+                    c.a = Mathf.Lerp(1f, 0f, t * t); // Fade out quadratic
+                    img.color = c;
+                }
+                
+                // Shrink
+                sparks[i].localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        if(container != null) Destroy(container);
     }
 }
