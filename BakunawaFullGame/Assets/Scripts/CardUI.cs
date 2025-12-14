@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
-public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI References")]
     public Image cardFrameImage;
@@ -23,6 +23,17 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     [Header("Settings")]
     public bool isEnemy = false;
 
+    [Header("Animation Settings")]
+    [SerializeField] private float hoverScale = 1.1f;
+    [SerializeField] private float selectedScale = 1.1f;
+    [SerializeField] private float selectedYOffset = 20f;
+    [SerializeField] private float animSpeed = 15f;
+    
+    // Internal Animation State
+    private Vector3 baseScale;
+    private bool isHovered = false;
+    public bool IsSelected { get; private set; } = false; // Public property for read access logic
+
     private CardData data;
     private bool isPressed = false;
     private float pressTimer = 0f;
@@ -36,6 +47,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public void Setup(CardData cardData)
     {
         data = cardData;
+        baseScale = transform.localScale;
+        // Keep initial scale from the prefab or set to one
+        if (baseScale == Vector3.zero) baseScale = Vector3.one;
 
         if (nameText != null) nameText.text = data.cardName;
         if (costText != null) costText.text = data.energyCost.ToString();
@@ -103,8 +117,21 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
         if (selectionBorder != null) selectionBorder.SetActive(false);
-
+        IsSelected = false; // Reset internal state
+        
         SetVisualsVisible(true);
+    }
+
+    // --- Hover Handling ---
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (!enabled || isEnemy || isDeckMode || isLocked) return;
+        isHovered = true;
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        isHovered = false;
     }
 
     // --- Input Handling ---
@@ -141,10 +168,18 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             // 3. Normal Logic
             if (HandManager.Instance.isPlanningPhase)
             {
-                if (!isLocked && selectionBorder != null)
+                if (!isLocked)
                 {
-                    HandManager.Instance.ToggleCardSelection(this, !selectionBorder.activeSelf);
-                    selectionBorder.SetActive(!selectionBorder.activeSelf);
+                    // Toggle Selection Logic
+                    bool targetState = !IsSelected;
+                    // Ask Manager if we can toggle (updates energy etc)
+                    bool success = HandManager.Instance.ToggleCardSelection(this, targetState);
+                    
+                    if (success)
+                    {
+                        IsSelected = targetState;
+                        if (selectionBorder != null) selectionBorder.SetActive(IsSelected);
+                    }
                 }
             }
             else
@@ -176,5 +211,52 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
                 }
             }
         }
+        
+        UpdateAnimation();
+    }
+
+    void UpdateAnimation()
+    {
+        // Safety: Only animate if in valid hand areas
+        if (HandManager.Instance == null) return;
+        Transform p = transform.parent;
+        if (p != HandManager.Instance.handArea && p != HandManager.Instance.lockedHandArea) return;
+
+        // Calculate Target Scale & Position
+        Vector3 targetScaleVec = baseScale;
+        float targetY = 0f;
+
+        if (isLocked)
+        {
+            // If locked, usually we don't animate or we keep it default
+            // But if it's in the 'LockedHandArea', maybe it shouldn't pop.
+        }
+        else if (isEnemy || isDeckMode)
+        {
+            // No interaction animations
+        }
+        else
+        {
+            if (IsSelected)
+            {
+                targetScaleVec = baseScale * selectedScale;
+                targetY = selectedYOffset;
+            }
+            else if (isHovered && !isPressed)
+            {
+                targetScaleVec = baseScale * hoverScale;
+                targetY = selectedYOffset * 0.5f; // Slight lift on hover
+            }
+        }
+
+        // Apply Smoothing
+        transform.localScale = Vector3.Lerp(transform.localScale, targetScaleVec, Time.deltaTime * animSpeed);
+        
+        // Apply Y-Offset logic (handling potential LayoutGroup overrides locally if possible)
+        // Note: If LayoutGroup controls this, localPosition.y might be reset. 
+        // We attempt to animate it; if it fails due to layout, at least Scale works.
+        Vector3 currentLocalPos = transform.localPosition;
+        float newY = Mathf.Lerp(currentLocalPos.y, targetY, Time.deltaTime * animSpeed);
+        transform.localPosition = new Vector3(currentLocalPos.x, newY, currentLocalPos.z);
     }
 }
