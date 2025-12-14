@@ -140,15 +140,81 @@ public class HandManager : MonoBehaviour
     public bool alayDebuffActive = false;
     public bool agongPlayedThisRound = false;
 
+    private Image clashDimmer;
+
+    // ... [Existing Awake] ...
+    // Helper for animation timing
+    float shakingTimeNorm(float ct, float dur)
+    {
+        float t = ct / dur;
+        return Mathf.Clamp01(t);
+    }
+    
     void Awake()
     {
         Instance = this;
+        EnsureDimmer();
+    }
+
+    void EnsureDimmer()
+    {
+        if (clashDimmer != null) return;
+
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
+        
+        if (rootCanvas != null)
+        {
+            GameObject dimObj = new GameObject("ClashDimmer");
+            dimObj.transform.SetParent(rootCanvas.transform, false);
+            dimObj.transform.SetAsFirstSibling(); // Put it behind most things, but we'll control draw order via card reparenting
+            
+            clashDimmer = dimObj.AddComponent<Image>();
+            clashDimmer.color = new Color(0, 0, 0, 0f); // Start transparent
+            clashDimmer.raycastTarget = false;
+            
+            // Stretch
+            RectTransform rt = dimObj.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+    }
+
+    IEnumerator FadeDimmer(bool fadeIn, float duration = 0.3f)
+    {
+        if (clashDimmer == null) EnsureDimmer();
+        if (clashDimmer == null) yield break;
+
+        // Ensure dimmer is just behind the front-most elements (like our clashing cards)
+        // Since cards are moved to LastSibling of Root, the dimmer needs to be SecondToLast? 
+        // Or just let cards pop over it. 
+        // We'll set dimmer to LastSibling first, then when cards move to root they will become LastSibling (on top of dimmer).
+        if (fadeIn) clashDimmer.transform.SetAsLastSibling();
+
+        float startAlpha = clashDimmer.color.a;
+        float targetAlpha = fadeIn ? 0.75f : 0f;
+        float elapsed = 0f;
+
+        while(elapsed < duration)
+        {
+            float t = elapsed / duration;
+            float a = Mathf.Lerp(startAlpha, targetAlpha, t);
+            clashDimmer.color = new Color(0,0,0, a);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        clashDimmer.color = new Color(0,0,0, targetAlpha);
     }
 
     // [Enhanced] Multi-Phase Card Clash Animation - V2 (Root Canvas Detachment)
     IEnumerator AnimateCardClash(CardUI playerCard, CardUI enemyCard)
     {
         // === PHASE 0: SETUP & DETACHMENT ===
+        // Dim the background
+        StartCoroutine(FadeDimmer(true, 0.4f));
+
         // 1. Capture Original Context
         Transform pOriginalParent = playerCard.transform.parent;
         Transform eOriginalParent = (enemyCard != null) ? enemyCard.transform.parent : null;
@@ -181,16 +247,15 @@ public class HandManager : MonoBehaviour
         if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
 
         // Define Key Positions relative to Screen Center
-        // We use the battleZone position as the visual center anchor
-        Vector3 centerPoint = battleZone.position;
-        float verticalOffset = 250f; // How far up/down they start the clash
-        
-        Vector3 pReadyPos = centerPoint + new Vector3(0, -verticalOffset, 0);
-        Vector3 eReadyPos = centerPoint + new Vector3(0, verticalOffset, 0); // Enemy comes from top
-        if (enemyCard == null) eReadyPos = centerPoint; // Dummy target center
+        // We use the Root Canvas as the visual center anchor for the CLASH (Screen Center)
+        Vector3 clashPoint = rootT.position; // Screen Center
+        Vector3 centerPoint = battleZone.position; // Return target reference
 
-        // define Clash Center
-        Vector3 clashPoint = centerPoint; // Exact center
+        float verticalOffset = 350f; // Increase start distance for more drama
+        
+        Vector3 pReadyPos = clashPoint + new Vector3(0, -verticalOffset, 0);
+        Vector3 eReadyPos = clashPoint + new Vector3(0, verticalOffset, 0); // Enemy comes from top
+        if (enemyCard == null) eReadyPos = clashPoint; // Dummy target center
 
         // === PHASE 1: WINDUP / ALIGN (0.4s) ===
         // Move from wherever they are (Hand/Deck) to the "Ready" positions
@@ -200,6 +265,10 @@ public class HandManager : MonoBehaviour
         Quaternion pStartRot = playerCard.transform.rotation;
         Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
 
+        // Scale Up Logic
+        Vector3 normalScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        Vector3 clashScaleVec = normalScale * 1.3f; // 30% larger for impact
+
         while (elapsed < windupTime)
         {
             float t = elapsed / windupTime;
@@ -207,15 +276,20 @@ public class HandManager : MonoBehaviour
 
             playerCard.transform.position = Vector3.Lerp(pStartPos, pReadyPos, t);
             playerCard.transform.rotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
+            playerCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
 
             if (enemyCard != null)
             {
                 enemyCard.transform.position = Vector3.Lerp(eStartPos, eReadyPos, t);
                 enemyCard.transform.rotation = Quaternion.Lerp(eStartRot, Quaternion.identity, t);
+                enemyCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
             }
             elapsed += Time.deltaTime;
             yield return null;
         }
+
+        playerCard.transform.localScale = clashScaleVec;
+        if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
 
         // === PHASE 2: ANTICIPATION (0.15s) ===
         // Brief pause/pull back before strike
@@ -233,21 +307,19 @@ public class HandManager : MonoBehaviour
         // Dynamic Height Calculation to prevent overlap
         float actualHeight = 250f; // Default fallback
         RectTransform pRect = playerCard.GetComponent<RectTransform>();
-        // Check rect height and scale
-        if (pRect != null) actualHeight = pRect.rect.height * playCardScale;
+        if (pRect != null) actualHeight = pRect.rect.height * clashScaleVec.y;
 
         float cardHalfHeight = actualHeight / 2f;
         
-        // Calculate Separation
-        // We want them to touch edges (center distance = half height + half height = full height / 2 ?? No)
-        // Center to Center distance must be (h/2) + (h/2) = h.
-        // So offset from center is (h/2).
-        
-        float collisionGap = 0f; // Extra padding if needed
+        float collisionGap = 0f; 
         float offset = cardHalfHeight + collisionGap;
 
         Vector3 pImpactPos = clashPoint + new Vector3(0, -offset, 0);
         Vector3 eImpactPos = clashPoint + new Vector3(0, offset, 0);
+
+        // STRETCH VECTORS (Elongate on Y, thin on X)
+        // Apply relative to the current clashScaleVec
+        Vector3 stretchScale = new Vector3(clashScaleVec.x * 0.8f, clashScaleVec.y * 1.2f, clashScaleVec.z);
 
         while (elapsed < lungeTime)
         {
@@ -255,27 +327,34 @@ public class HandManager : MonoBehaviour
             t = t * t * t; // Cubic Ease In (Exciting!)
 
             playerCard.transform.position = Vector3.Lerp(pReadyPos, pImpactPos, t);
-            // No rotation change needed if we want them straight
-            // playerCard.transform.rotation = Quaternion.Lerp(Quaternion.identity, pTilt, t); 
+            
+            // Apply STRETCH as velocity increases
+            // Max stretch at t=1
+            playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
 
             if (enemyCard != null)
             {
                 enemyCard.transform.position = Vector3.Lerp(eReadyPos, eImpactPos, t);
-                // enemyCard.transform.rotation = Quaternion.Lerp(Quaternion.identity, eTilt, t);
+                enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
             }
             elapsed += Time.deltaTime;
             yield return null;
         }
+
+        // Snap to final collision position
+        playerCard.transform.position = pImpactPos;
+        if (enemyCard != null) enemyCard.transform.position = eImpactPos;
+
 
         // === PHASE 4: IMPACT (One Frame + Shake) ===
         // Visuals
         playerCard.SetBroken(true);
         if (enemyCard != null) enemyCard.SetBroken(true);
 
-        // Screen Shake
+        // Screen Shake & IMPACT PUNCH
         Vector3 camOriginalPos = Camera.main.transform.position;
-        float shakeDuration = 0.2f;
-        float shakeMagnitude = 10f;
+        float shakeDuration = 0.25f; // Slightly longer
+        float shakeMagnitude = 15f; // Impactful jitter
         float shakeTimer = 0f;
         
         // Start Recoil concurrently with shake
@@ -283,23 +362,57 @@ public class HandManager : MonoBehaviour
         Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
         Vector3 eRecoilPos = eImpactPos + new Vector3(0, 50f, 0);
 
+        // SQUASH TARGET (Flatten on Y, widen on X)
+        // This replaces the simple scale punch. We squash HARD then spring back.
+        Vector3 squashScale = new Vector3(clashScaleVec.x * 1.3f, clashScaleVec.y * 0.7f, clashScaleVec.z);
+        Vector3 overshootScale = new Vector3(clashScaleVec.x * 0.9f, clashScaleVec.y * 1.1f, clashScaleVec.z); // Spring effect
+
         while (shakeTimer < recoilTime) // Loop for length of recoil
         {
-            // Shake Logic
+            float t = shakeTimer / recoilTime;
+            t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out Recoil
+
+            // Baset Recoil Position
+            Vector3 currentRecoilP = Vector3.Lerp(pImpactPos, pRecoilPos, t);
+            Vector3 currentRecoilE = Vector3.Lerp(eImpactPos, eRecoilPos, t);
+
+            // ADD VIOLENT SHAKE (Jitter)
             if (shakeTimer < shakeDuration)
             {
-               Vector3 shakeOffset = Random.insideUnitSphere * shakeMagnitude * (1f - shakeTimer/shakeDuration);
-               shakeOffset.z = 0;
-               Camera.main.transform.position = camOriginalPos + shakeOffset;
+               float strength = 1f - (shakeTimer / shakeDuration);
+               Vector3 cardJitter = (Vector3)(Random.insideUnitCircle * shakeMagnitude * strength);
+               
+               playerCard.transform.position = currentRecoilP + cardJitter;
+               if (enemyCard != null) enemyCard.transform.position = currentRecoilE + cardJitter;
+
+               // SQUASH AND STRETCH DECAY LOGIC
+               // 0.0 -> 0.1 : Squash
+               // 0.1 -> 0.3 : Overshoot (Stretch)
+               // 0.3 -> 1.0 : Return to Normal
+               
+               float scalePhase = shakingTimeNorm(shakeTimer, 0.25f); // localized t
+               Vector3 currentScale = clashScaleVec;
+
+               if (scalePhase < 0.3f)
+               {
+                   currentScale = Vector3.Lerp(squashScale, overshootScale, scalePhase / 0.3f);
+               }
+               else
+               {
+                   currentScale = Vector3.Lerp(overshootScale, clashScaleVec, (scalePhase - 0.3f) / 0.7f);
+               }
+
+               playerCard.transform.localScale = currentScale;
+               if (enemyCard != null) enemyCard.transform.localScale = currentScale;
             }
-            else Camera.main.transform.position = camOriginalPos;
-
-            // Recoil Logic
-            float t = shakeTimer / recoilTime;
-            t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out
-
-            playerCard.transform.position = Vector3.Lerp(pImpactPos, pRecoilPos, t);
-            if (enemyCard != null) enemyCard.transform.position = Vector3.Lerp(eImpactPos, eRecoilPos, t);
+            else 
+            {
+               playerCard.transform.position = currentRecoilP;
+               if (enemyCard != null) enemyCard.transform.position = currentRecoilE;
+               
+               playerCard.transform.localScale = clashScaleVec;
+               if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
+            }
 
             shakeTimer += Time.deltaTime;
             yield return null;
@@ -307,6 +420,9 @@ public class HandManager : MonoBehaviour
         Camera.main.transform.position = camOriginalPos; // Ensure reset
 
         // === PHASE 5: RETURN TO BOARD (0.4s) ===
+        // Undim background
+        StartCoroutine(FadeDimmer(false, 0.4f));
+
         // Return cards to their specific zones (Player Zone / Enemy Zone)
         
         if (pOriginalParent != null) playerCard.transform.SetParent(pOriginalParent, true);
@@ -362,11 +478,14 @@ public class HandManager : MonoBehaviour
 
             playerCard.transform.position = Vector3.Lerp(pRecoilPos, pFinalPos, t);
             playerCard.transform.rotation = Quaternion.Lerp(pRecoilRot, Quaternion.identity, t);
+            // Scale Back Down
+            playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
             
             if (enemyCard != null)
             {
                  enemyCard.transform.position = Vector3.Lerp(eRecoilPos, eFinalPos, t);
                  enemyCard.transform.rotation = Quaternion.Lerp(eRecoilRot, Quaternion.identity, t);
+                 enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
             }
             elapsed += Time.deltaTime;
             yield return null;
