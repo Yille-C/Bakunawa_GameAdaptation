@@ -178,6 +178,7 @@ public class BakunawaAI : MonoBehaviour
         Vector3 startPos = card.transform.position;
         Quaternion startRot = card.transform.rotation;
         
+        // Target is CENTER of battle zone
         Vector3 targetPos = battleZone.position;
         Quaternion targetRot = Quaternion.identity;
 
@@ -196,10 +197,11 @@ public class BakunawaAI : MonoBehaviour
         }
         card.transform.position = targetPos;
         card.transform.rotation = targetRot;
+        card.transform.localPosition = Vector3.zero; // Ensure centered locally
 
-        // Restore Layout
+        // Keep ignoreLayout TRUE - clash animation will handle final positioning
         LayoutElement le = card.GetComponent<LayoutElement>();
-        if (le != null) le.ignoreLayout = false;
+        if (le != null) le.ignoreLayout = true;
     }
 
     public void CleanupRound()

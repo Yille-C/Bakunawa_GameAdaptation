@@ -358,6 +358,9 @@ public class HandManager : MonoBehaviour
         float shakeMagnitude = 15f; // Impactful jitter
         float shakeTimer = 0f;
         
+        // SPAWN SPARKS
+        CreateImpactSparks(clashPoint);
+
         // Start Recoil concurrently with shake
         float recoilTime = 0.3f;
         Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
@@ -465,46 +468,100 @@ public class HandManager : MonoBehaviour
         playerCard.transform.position = pRecoilPos;
         if (enemyCard != null) enemyCard.transform.position = eRecoilPos;
         
-        // Fly Home
-        float returnTime = 0.4f;
-        elapsed = 0f;
+        // === ANIMATE TO PILE ===
+        // Skip the old "return to board" logic - go directly to pile animation
+        // Instead of relying on HorizontalLayoutGroup (which causes overflow),
+        // we manually stack clashed cards on the LEFT/RIGHT side of each zone.
         
-        Quaternion pRecoilRot = playerCard.transform.rotation; 
-        Quaternion eRecoilRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
-
-        while(elapsed < returnTime)
+        // PLAYER CARD PILE - Calculate target
+        pLe.ignoreLayout = true;
+        int playerPileIndex = 0;
+        Transform pZone = pOriginalParent != null ? pOriginalParent : battleZone;
+        foreach(Transform child in pZone)
         {
-            float t = elapsed / returnTime;
-            t = t * t * (3f - 2f * t);
+            if (child == playerCard.transform) break;
+            CardUI otherCard = child.GetComponent<CardUI>();
+            if (otherCard != null && !otherCard.isEnemy) playerPileIndex++;
+        }
 
-            playerCard.transform.position = Vector3.Lerp(pRecoilPos, pFinalPos, t);
-            playerCard.transform.rotation = Quaternion.Lerp(pRecoilRot, Quaternion.identity, t);
-            // Scale Back Down
+        RectTransform pZoneRect = pZone as RectTransform;
+        float pileOffsetX = 30f;
+        float pPileBaseX = -pZoneRect.rect.width / 2f + 100f;
+        Vector3 pPileTargetLocal = new Vector3(pPileBaseX + playerPileIndex * pileOffsetX, 0, 0);
+        Quaternion pPileTargetRot = Quaternion.Euler(0, 0, Random.Range(-3f, 3f));
+        
+        // ENEMY CARD PILE - Calculate target
+        Vector3 ePileTargetLocal = Vector3.zero;
+        Quaternion ePileTargetRot = Quaternion.identity;
+        Transform eZone = null;
+        
+        if (enemyCard != null)
+        {
+            eLe.ignoreLayout = true;
+            int enemyPileIndex = 0;
+            eZone = eOriginalParent != null ? eOriginalParent : battleZone;
+            foreach(Transform child in eZone)
+            {
+                if (child == enemyCard.transform) break;
+                CardUI otherCard = child.GetComponent<CardUI>();
+                if (otherCard != null && otherCard.isEnemy) enemyPileIndex++;
+            }
+
+            RectTransform eZoneRect = eZone as RectTransform;
+            float ePileBaseX = eZoneRect.rect.width / 2f - 100f;
+            ePileTargetLocal = new Vector3(ePileBaseX - enemyPileIndex * pileOffsetX, 0, 0);
+            ePileTargetRot = Quaternion.Euler(0, 0, Random.Range(-3f, 3f));
+        }
+
+        // Reparent NOW (to prepare for local position animation)
+        playerCard.transform.SetParent(pZone, true); // Keep world position
+        playerCard.transform.SetAsLastSibling();
+        Vector3 pPileStartLocal = playerCard.transform.localPosition;
+        Quaternion pPileStartRot = playerCard.transform.localRotation;
+        
+        Vector3 ePileStartLocal = Vector3.zero;
+        Quaternion ePileStartRot = Quaternion.identity;
+        if (enemyCard != null)
+        {
+            enemyCard.transform.SetParent(eZone, true);
+            enemyCard.transform.SetAsLastSibling();
+            ePileStartLocal = enemyCard.transform.localPosition;
+            ePileStartRot = enemyCard.transform.localRotation;
+        }
+
+        // === ANIMATE TO PILE (0.35s) ===
+        float pileTime = 0.35f;
+        elapsed = 0f;
+        while(elapsed < pileTime)
+        {
+            float t = elapsed / pileTime;
+            t = t * t * (3f - 2f * t); // SmoothStep
+            
+            playerCard.transform.localPosition = Vector3.Lerp(pPileStartLocal, pPileTargetLocal, t);
+            playerCard.transform.localRotation = Quaternion.Lerp(pPileStartRot, pPileTargetRot, t);
             playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
             
             if (enemyCard != null)
             {
-                 enemyCard.transform.position = Vector3.Lerp(eRecoilPos, eFinalPos, t);
-                 enemyCard.transform.rotation = Quaternion.Lerp(eRecoilRot, Quaternion.identity, t);
-                 enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
+                enemyCard.transform.localPosition = Vector3.Lerp(ePileStartLocal, ePileTargetLocal, t);
+                enemyCard.transform.localRotation = Quaternion.Lerp(ePileStartRot, ePileTargetRot, t);
+                enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
             }
+            
             elapsed += Time.deltaTime;
             yield return null;
         }
-
-        // === CLEANUP ===
-        // Restore final positions and re-enable layout
-        playerCard.transform.position = pFinalPos;
-        playerCard.transform.rotation = Quaternion.identity;
-        playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
-        pLe.ignoreLayout = false;
-
+        
+        // Final snap
+        playerCard.transform.localPosition = pPileTargetLocal;
+        playerCard.transform.localRotation = pPileTargetRot;
+        playerCard.transform.localScale = normalScale;
+        
         if (enemyCard != null)
         {
-            enemyCard.transform.position = eFinalPos;
-            enemyCard.transform.rotation = Quaternion.identity;
-            enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
-            eLe.ignoreLayout = false;
+            enemyCard.transform.localPosition = ePileTargetLocal;
+            enemyCard.transform.localRotation = ePileTargetRot;
+            enemyCard.transform.localScale = normalScale;
         }
     }
 
@@ -761,6 +818,12 @@ public class HandManager : MonoBehaviour
         cardToPlay.transform.SetParent(battleZone);
         cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         cardToPlay.transform.localRotation = Quaternion.identity;
+        
+        // Position card at CENTER of battle zone (not piled yet)
+        LayoutElement le = cardToPlay.GetComponent<LayoutElement>();
+        if (le == null) le = cardToPlay.gameObject.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
+        cardToPlay.transform.localPosition = Vector3.zero; // Center
         cardToPlay.SetLockedState(false);
         // Disable glow when card is played
         if (cardToPlay.glowOverlay != null) cardToPlay.glowOverlay.SetGlowEnabledImmediate(false);
@@ -1017,6 +1080,8 @@ public class HandManager : MonoBehaviour
             card.SetLockedState(true);
         }
 
+        UpdateContainerSpacing(tribeLockedPanel as RectTransform);
+
         List<Transform> remainingCards = new List<Transform>();
         foreach (Transform child in handArea) remainingCards.Add(child);
         foreach (Transform child in remainingCards)
@@ -1228,6 +1293,10 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+            
+            // Animate card moving to board
+            yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(enemyCard));
+            
             RecalculateBattleEffects(); // This puts card in battleZone and updates state
 
             // NEW: Animate Clash
@@ -1309,6 +1378,10 @@ public class HandManager : MonoBehaviour
         {
             yield return new WaitForSeconds(1.0f);
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
+            
+            // Animate card moving to board
+            yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(enemyCard));
+            
             RecalculateBattleEffects();
 
             if (ScoreManager.Instance != null)
@@ -1586,5 +1659,131 @@ public class HandManager : MonoBehaviour
                 btn.gameObject.AddComponent<UIButtonAnimation>();
             }
         }
+    }
+    void CreateImpactSparks(Vector3 pos)
+    {
+        // 1. Container
+        GameObject container = new GameObject("SparkContainer");
+        container.transform.position = pos;
+        
+        Canvas root = GetComponentInParent<Canvas>();
+        if (root != null && root.rootCanvas != null) root = root.rootCanvas;
+        if (root != null) container.transform.SetParent(root.transform);
+        else container.transform.SetParent(transform);
+        
+        container.transform.localScale = Vector3.one;
+        container.transform.SetAsLastSibling(); // Top of everything
+
+        // 2. Spawn Sprites
+        int sparkCount = 20;
+        List<RectTransform> sparks = new List<RectTransform>();
+        List<Vector2> velocities = new List<Vector2>();
+
+        for(int i=0; i<sparkCount; i++)
+        {
+            GameObject s = new GameObject("Spark");
+            s.transform.SetParent(container.transform);
+            s.transform.position = pos; // Start at center
+            s.transform.localScale = Vector3.one;
+            
+            Image img = s.AddComponent<Image>();
+            // Gold / bright orange / white mix
+            float rVal = Random.value;
+            if (rVal > 0.6f) img.color = new Color(1f, 0.9f, 0.4f); // Pale Gold
+            else if (rVal > 0.3f) img.color = new Color(1f, 0.6f, 0.1f); // Orange
+            else img.color = Color.white; // Sparkle center
+            
+            // Random direction
+            Vector2 dir = Random.insideUnitCircle.normalized;
+            float speed = Random.Range(300f, 800f); // High speed for screen space
+            velocities.Add(dir * speed);
+
+            RectTransform rt = s.GetComponent<RectTransform>();
+            float size = Random.Range(10f, 30f);
+            rt.sizeDelta = new Vector2(size, size);
+            sparks.Add(rt);
+        }
+
+        StartCoroutine(AnimateUIExplosion(container, sparks, velocities));
+    }
+
+    IEnumerator AnimateUIExplosion(GameObject container, List<RectTransform> sparks, List<Vector2> velocities)
+    {
+        float duration = 0.5f;
+        float elapsed = 0f;
+
+        while(elapsed < duration && container != null)
+        {
+            float t = elapsed / duration;
+            for(int i=0; i<sparks.Count; i++)
+            {
+                if(sparks[i] == null) continue;
+                
+                // Move
+                sparks[i].anchoredPosition += velocities[i] * Time.deltaTime;
+                
+                // Slow down (Drag)
+                velocities[i] = Vector2.Lerp(velocities[i], Vector2.zero, Time.deltaTime * 5f);
+                
+                // Find Image to Fade
+                Image img = sparks[i].GetComponent<Image>();
+                if (img != null)
+                {
+                    Color c = img.color;
+                    c.a = Mathf.Lerp(1f, 0f, t * t); // Fade out quadratic
+                    img.color = c;
+                }
+                
+                // Shrink
+                sparks[i].localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        if(container != null) Destroy(container);
+    }
+
+    // --- DYNAMIC LAYOUT HELPER ---
+    public void UpdateContainerSpacing(RectTransform container)
+    {
+        if (container == null) return;
+        HorizontalLayoutGroup hlg = container.GetComponent<HorizontalLayoutGroup>();
+        if (hlg == null) return;
+
+        // FORCE settings to prevent fighting
+        hlg.childControlWidth = false;
+        hlg.childForceExpandWidth = false;
+
+        int count = container.childCount;
+        if (count <= 1) 
+        {
+            hlg.spacing = 20; // Default
+            return;
+        }
+
+        // Force canvas update to ensure rects are valid
+        Canvas.ForceUpdateCanvases();
+
+        // Get Reference Card Width
+        float cardWidth = 0f;
+        RectTransform child = container.GetChild(0) as RectTransform;
+        if (child != null) cardWidth = child.rect.width * child.localScale.x;
+        if (cardWidth <= 10f) cardWidth = 150f; // Safer hardcoded fallback
+
+        // HARD CONSTRAINT: 
+        // The mat is visually about 950 pixels wide. We MUST fit inside this.
+        float maxVisualWidth = 950f; 
+        
+        float totalCardWidth = count * cardWidth;
+        
+        // Desired equation: totalCardWidth + (count - 1) * spacing <= availableWidth
+        // spacing <= (availableWidth - totalCardWidth) / (count - 1)
+
+        float maxSpacing = 20f;
+        float dynamicSpacing = (maxVisualWidth - totalCardWidth) / (float)(count - 1);
+        
+        // Clamp: Never expand beyond maxSpacing, but allow infinite overlap (negative spacing)
+        hlg.spacing = Mathf.Min(maxSpacing, dynamicSpacing);
     }
 }
