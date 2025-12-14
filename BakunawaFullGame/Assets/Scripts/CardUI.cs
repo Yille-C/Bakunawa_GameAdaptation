@@ -40,6 +40,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     // Internal Animation State
     private Vector3 baseScale;
     private bool isHovered = false;
+    public bool IsHovered => isHovered; // Public property for CurvedHandLayout
     public bool IsSelected { get; private set; } = false; // Public property for read access logic
 
     private CardData data;
@@ -242,19 +243,23 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
 
     void UpdateAnimation()
     {
-        // Safety: Only animate if in valid hand areas
+        // Safety: Only animate if in valid areas
         if (HandManager.Instance == null) return;
         Transform p = transform.parent;
-        if (p != HandManager.Instance.handArea && p != HandManager.Instance.lockedHandArea) return;
+        
+        // Skip animation for handArea - CurvedHandLayout handles that
+        if (p == HandManager.Instance.handArea) return;
+        
+        // Only animate in lockedHandArea
+        if (p != HandManager.Instance.lockedHandArea) return;
 
-        // Calculate Target Scale & Position
+        // Calculate Target Scale & Position for locked hand area
         Vector3 targetScaleVec = baseScale;
         float targetY = 0f;
 
         if (isLocked)
         {
-            // If locked, usually we don't animate or we keep it default
-            // But if it's in the 'LockedHandArea', maybe it shouldn't pop.
+            // Keep locked cards at base state
         }
         else if (isEnemy || isDeckMode)
         {
@@ -277,9 +282,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Apply Smoothing
         transform.localScale = Vector3.Lerp(transform.localScale, targetScaleVec, Time.deltaTime * animSpeed);
         
-        // Apply Y-Offset logic (handling potential LayoutGroup overrides locally if possible)
-        // Note: If LayoutGroup controls this, localPosition.y might be reset. 
-        // We attempt to animate it; if it fails due to layout, at least Scale works.
+        // Apply Y-Offset for locked area
         Vector3 currentLocalPos = transform.localPosition;
         float newY = Mathf.Lerp(currentLocalPos.y, targetY, Time.deltaTime * animSpeed);
         transform.localPosition = new Vector3(currentLocalPos.x, newY, currentLocalPos.z);
