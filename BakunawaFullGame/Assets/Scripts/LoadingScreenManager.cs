@@ -14,7 +14,10 @@ public class LoadingScreenManager : MonoBehaviour
     [SerializeField] private GameObject loadingScreenCanvas; 
     
     [Tooltip("Drag the Text object here (supports Legacy Text or TextMeshPro).")]
-    [SerializeField] private GameObject loadingTextObject;   
+    [SerializeField] private GameObject loadingTextObject;
+
+    [Tooltip("Drag the Tip Text object here to display random lore.")]
+    [SerializeField] private GameObject tipTextObject;   
     
     [Tooltip("Drag the Progress Bar Image object here.")]
     [SerializeField] private Image progressBar;              
@@ -26,6 +29,8 @@ public class LoadingScreenManager : MonoBehaviour
     private CanvasGroup canvasGroup; 
     private Text legacyText;
     private TMPro.TMP_Text tmpText; // Reference to TextMeshPro if it exists
+    private Text legacyTipText;
+    private TMPro.TMP_Text tmpTipText;
 
     [Header("Settings")]
     [SerializeField] private float fadeDuration = 0.5f;
@@ -34,6 +39,10 @@ public class LoadingScreenManager : MonoBehaviour
     [Header("Progress Bar Settings")]
     [SerializeField] private bool useSmoothProgress = true;
     [SerializeField] private float smoothFillSpeed = 5.0f;
+
+    [Header("Tips / Lore")]
+    [TextArea(2, 4)]
+    [SerializeField] private string[] randomTips;
 
     [Header("Animation Details")]
     [Tooltip("The Cloud object to animate (Horizontal movement).")]
@@ -125,14 +134,31 @@ public class LoadingScreenManager : MonoBehaviour
             if (starsGroup == null) starsGroup = starsObject.AddComponent<CanvasGroup>();
         }
 
-        // 2. Setup Text (Legacy vs TMP)
+    // 2. Setup Text (Legacy vs TMP)
         if (loadingTextObject != null)
         {
             legacyText = loadingTextObject.GetComponent<Text>();
-            // Try get TMP via reflection or direct type if we added user "using TMPro;" 
-            // but to be safe without enforcing TMP dependencies, we stick to standard checks or simple assumed component.
-            // For now, let's assume if legacy is null, check for generic component.
-             tmpText = loadingTextObject.GetComponent<TMPro.TMP_Text>();
+            tmpText = loadingTextObject.GetComponent<TMPro.TMP_Text>();
+        }
+
+        if (tipTextObject != null)
+        {
+            legacyTipText = tipTextObject.GetComponent<Text>();
+            tmpTipText = tipTextObject.GetComponent<TMPro.TMP_Text>();
+        }
+        else
+        {
+            // Auto-find attempt
+            Transform t = loadingScreenCanvas.transform.Find("TipText");
+            if (t == null) t = loadingScreenCanvas.transform.Find("LoreText");
+            if (t == null) t = loadingScreenCanvas.transform.Find("Tips");
+            
+            if (t != null)
+            {
+                tipTextObject = t.gameObject;
+                legacyTipText = tipTextObject.GetComponent<Text>();
+                tmpTipText = tipTextObject.GetComponent<TMPro.TMP_Text>();
+            }
         }
     }
 
@@ -141,7 +167,7 @@ public class LoadingScreenManager : MonoBehaviour
         // Only animate if loading screen is visible
         if (loadingScreenCanvas != null && loadingScreenCanvas.activeInHierarchy)
         {
-            float time = Time.time;
+            float time = Time.unscaledTime;
 
             // 1. Cloud: Blowing wind (Horizontal Sway)
             if (cloudRect != null)
@@ -185,6 +211,22 @@ public class LoadingScreenManager : MonoBehaviour
         if (loadingScreenCanvas != null)
         {
             loadingScreenCanvas.SetActive(true);
+
+            // Set a random tip immediately before fade-in
+            if (randomTips != null && randomTips.Length > 0)
+            {
+                if (legacyTipText != null || tmpTipText != null)
+                {
+                    string randomTip = randomTips[Random.Range(0, randomTips.Length)];
+                    if (legacyTipText != null) legacyTipText.text = randomTip;
+                    if (tmpTipText != null) tmpTipText.text = randomTip;
+                }
+                else
+                {
+                    Debug.LogWarning("LoadingScreenManager: Random tips are defined, but no TipText object is assigned or found!");
+                }
+            }
+
             if (canvasGroup != null)
             {
                 canvasGroup.alpha = 0;
@@ -216,16 +258,25 @@ public class LoadingScreenManager : MonoBehaviour
         // 3. Update Progress
         while (!asyncLoad.isDone)
         {
-            float targetProgress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
+            // Calculate progress based on actual scene loading (0 to 1)
+            float sceneProgress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
+
+            // Calculate progress based on minimum time (0 to 1)
+            float timeProgress = Mathf.Clamp01((Time.time - startTime) / minimumLoadTime);
+
+            // The effective target is the SMALLER of the two. 
+            // This prevents the bar from shooting to 100% if the scene loads fast but we are waiting for timer.
+            float combinedTarget = Mathf.Min(sceneProgress, timeProgress);
             
             if (useSmoothProgress)
             {
-                currentFill = Mathf.Lerp(currentFill, targetProgress, Time.deltaTime * smoothFillSpeed);
-                if (targetProgress >= 1f && Mathf.Abs(currentFill - 1f) < 0.01f) currentFill = 1f;
+                currentFill = Mathf.Lerp(currentFill, combinedTarget, Time.unscaledDeltaTime * smoothFillSpeed);
+                // Snap to 1 only if we are very close AND effectively done
+                if (combinedTarget >= 1f && Mathf.Abs(currentFill - 1f) < 0.01f) currentFill = 1f;
             }
             else
             {
-                currentFill = targetProgress;
+                currentFill = combinedTarget;
             }
 
             // Update Bar
@@ -240,10 +291,20 @@ public class LoadingScreenManager : MonoBehaviour
             if (tmpText != null) tmpText.text = msg;
 
             // Check completion
+            // We are done if:
+            // 1. Scene load is physically done (>= 0.9)
+            // 2. Minimum timer has elapsed (timeProgress >= 1)
+            // 3. Visual bar has filled (if smoothing is on)
             bool visualDone = (!useSmoothProgress || currentFill >= 0.99f); 
 
             if (asyncLoad.progress >= 0.9f && (Time.time - startTime >= minimumLoadTime) && visualDone)
             {
+                 // Explicitly set to 100% before activating
+                if (progressBar != null) progressBar.fillAmount = 1f;
+                if (progressSlider != null) progressSlider.value = 1f;
+                if (legacyText != null) legacyText.text = "LOADING... 100%";
+                if (tmpText != null) tmpText.text = "LOADING... 100%";
+
                 asyncLoad.allowSceneActivation = true;
             }
 
