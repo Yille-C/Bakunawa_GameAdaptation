@@ -228,10 +228,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Check if we can even play right now (using HandManager check)
         // HandManager controls the flow, but we can pre-check
         // This prevents picking up cards when it's not our turn
-        // We can access 'playCardButton.interactable' indirectly or just try. 
-        // Better yet, just allow drag, and fail on drop if invalid.
-        // But for UX, maybe don't allow drag if locked.
-        // HandManager doesn't expose a simple "IsMyTurn" bool publicly other than button interactable.
+        if (HandManager.Instance.IsInputLocked) return;
+        
         // We will allow drag for now and fail on drop for feedback, OR check button.
         // Let's assume valid drag only if technically possible.
 

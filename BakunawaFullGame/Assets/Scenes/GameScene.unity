@@ -548,6 +548,7 @@ MonoBehaviour:
   cardPrefab: {fileID: 8458815608511427349, guid: 0294fc85874082747bee2512434a058b, type: 3}
   handArea: {fileID: 1590190052}
   tribeSelectedPanel: {fileID: 1585541530}
+  tribeLockedPanel: {fileID: 1182479339}
   deckPileArea: {fileID: 211859487}
   battleZone: {fileID: 1013582157}
   discardPileArea: {fileID: 1788652074}
@@ -558,6 +559,8 @@ MonoBehaviour:
   lockedScale: 0.6
   discardScale: 0.6
   planningTime: 61
+  tribePanelSpacing: -40
+  clashDuration: 0.5
   detailsPanel: {fileID: 247874080}
   detailName: {fileID: 1937611407}
   detailDesc: {fileID: 1691521361}
@@ -816,8 +819,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -5.5877, y: 145.44}
-  m_SizeDelta: {x: 1384.6326, y: 290.88867}
+  m_AnchoredPosition: {x: -5.5877, y: 174.31}
+  m_SizeDelta: {x: 1384.6326, y: 233.15}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &224339360
 MonoBehaviour:
@@ -3121,7 +3124,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: 40.8, y: -6}
+  m_AnchoredPosition: {x: 40.8, y: 0}
   m_SizeDelta: {x: 80, y: 80}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &870486021
@@ -3825,8 +3828,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -12.514709, y: -150.67924}
-  m_SizeDelta: {x: 1370.7715, y: 256.7284}
+  m_AnchoredPosition: {x: -12.514709, y: -135.88869}
+  m_SizeDelta: {x: 1370.7715, y: 227.1473}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1013582158
 MonoBehaviour:
@@ -8956,8 +8959,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0.000030518, y: 4.464}
-  m_SizeDelta: {x: 1920, y: 1071}
+  m_AnchoredPosition: {x: 0.000030518, y: 17}
+  m_SizeDelta: {x: 1920, y: 1144.9492}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2008359679
 MonoBehaviour:

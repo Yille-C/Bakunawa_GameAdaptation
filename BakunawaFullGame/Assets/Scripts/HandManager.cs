@@ -125,6 +125,7 @@ public class HandManager : MonoBehaviour
     private List<CardUI> selectedCardsUI = new List<CardUI>();
 
     public bool isPlanningPhase = true;
+    public bool IsInputLocked => inputLocked;
     private bool inputLocked = true;
     private float currentTimer;
     private CardUI currentBattleSelection;
@@ -744,6 +745,7 @@ public class HandManager : MonoBehaviour
     IEnumerator PlayPlayerCardSequence(CardUI cardToPlay)
     {
         playCardButton.interactable = false;
+        inputLocked = true; // Lock immediately
 
         CardDisplay display = cardToPlay.GetComponent<CardDisplay>();
         if (display != null && display.cardData != null && display.cardData.effectID == "sup_alay")
@@ -1184,6 +1186,9 @@ public class HandManager : MonoBehaviour
         }
         else
         {
+            // Lock Input as Enemy plays first
+            inputLocked = true;
+            
             // HIDDEN: Using Drag instead
             playCardButton.gameObject.SetActive(false);
             playCardButton.interactable = false;
@@ -1204,10 +1209,14 @@ public class HandManager : MonoBehaviour
             
             enemyHasPlayedPendingCard = true;
             RecalculateBattleEffects();
+            
+            // Allow Player Action
+            inputLocked = false;
             playCardButton.interactable = true;
         }
         else
         {
+            inputLocked = false;
             playCardButton.interactable = true;
         }
     }
@@ -1281,10 +1290,12 @@ public class HandManager : MonoBehaviour
     {
         if (tribeLockedPanel.childCount > 0)
         {
+            inputLocked = false;
             playCardButton.interactable = true;
         }
         else
         {
+            // Lock logic handled by next routines or EndRound
             if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
                 StartCoroutine(BakunawaSoloPlaySequence());
             else
