@@ -10,7 +10,15 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     public Text nameText;
     public Text costText;
     public Text attackText;
+    [Tooltip("Legacy selection border - will be hidden. Glow effect is now used instead.")]
     public GameObject selectionBorder;
+    
+    [Header("Glow Effect")]
+    [Tooltip("Optional: Glow overlay component. Will be auto-created if not assigned.")]
+    public CardGlowOverlay glowOverlay;
+    
+    // Legacy reference kept for compatibility
+    [HideInInspector] public CardGlowEffect glowEffect;
 
     [Header("Card States")]
     public GameObject cardBackObject;
@@ -50,6 +58,16 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         baseScale = transform.localScale;
         // Keep initial scale from the prefab or set to one
         if (baseScale == Vector3.zero) baseScale = Vector3.one;
+        
+        // Initialize glow overlay - auto-create if not assigned
+        if (glowOverlay == null)
+        {
+            glowOverlay = GetComponent<CardGlowOverlay>();
+            if (glowOverlay == null)
+            {
+                glowOverlay = gameObject.AddComponent<CardGlowOverlay>();
+            }
+        }
 
         if (nameText != null) nameText.text = data.cardName;
         if (costText != null) costText.text = data.energyCost.ToString();
@@ -68,7 +86,10 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             if (txt != null) txt.text = data.attackValue.ToString();
         }
 
+        // Hide legacy selection border (glow effect is used now)
         if (selectionBorder != null) selectionBorder.SetActive(false);
+        // Ensure glow starts disabled
+        if (glowOverlay != null) glowOverlay.SetGlowEnabledImmediate(false);
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
 
@@ -117,6 +138,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
         if (selectionBorder != null) selectionBorder.SetActive(false);
+        if (glowOverlay != null) glowOverlay.SetGlowEnabledImmediate(false);
         IsSelected = false; // Reset internal state
         
         SetVisualsVisible(true);
@@ -178,7 +200,10 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
                     if (success)
                     {
                         IsSelected = targetState;
-                        if (selectionBorder != null) selectionBorder.SetActive(IsSelected);
+                        // Use glow effect for visual feedback
+                        if (glowOverlay != null) glowOverlay.SetGlowEnabled(IsSelected);
+                        // Keep legacy border hidden
+                        if (selectionBorder != null) selectionBorder.SetActive(false);
                     }
                 }
             }

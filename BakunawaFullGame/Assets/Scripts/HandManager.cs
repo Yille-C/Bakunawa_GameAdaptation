@@ -294,13 +294,18 @@ public class HandManager : MonoBehaviour
 
         if (currentBattleSelection != null)
         {
+            // Disable glow on previously selected card
+            if (currentBattleSelection.glowOverlay != null)
+                currentBattleSelection.glowOverlay.SetGlowEnabled(false);
+            // Also hide legacy border just in case
             if (currentBattleSelection.selectionBorder != null)
                 currentBattleSelection.selectionBorder.SetActive(false);
         }
         currentBattleSelection = card;
-        if (currentBattleSelection.selectionBorder != null)
+        // Enable glow on newly selected card
+        if (currentBattleSelection.glowOverlay != null)
         {
-            currentBattleSelection.selectionBorder.SetActive(true);
+            currentBattleSelection.glowOverlay.SetGlowEnabled(true);
         }
     }
 
@@ -329,7 +334,9 @@ public class HandManager : MonoBehaviour
         cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         cardToPlay.transform.localRotation = Quaternion.identity;
         cardToPlay.SetLockedState(false);
-        cardToPlay.selectionBorder.SetActive(false);
+        // Disable glow when card is played
+        if (cardToPlay.glowOverlay != null) cardToPlay.glowOverlay.SetGlowEnabledImmediate(false);
+        if (cardToPlay.selectionBorder != null) cardToPlay.selectionBorder.SetActive(false);
 
         RecalculateBattleEffects();
 
@@ -574,7 +581,9 @@ public class HandManager : MonoBehaviour
                 agongPlayedThisRound = true;
 
             card.transform.SetParent(lockedHandArea);
-            card.selectionBorder.SetActive(false);
+            // Disable glow when card is locked in
+            if (card.glowOverlay != null) card.glowOverlay.SetGlowEnabledImmediate(false);
+            if (card.selectionBorder != null) card.selectionBorder.SetActive(false);
             card.SetLockedState(true);
         }
 
