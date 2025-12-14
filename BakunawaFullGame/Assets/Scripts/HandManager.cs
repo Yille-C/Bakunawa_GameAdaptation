@@ -82,7 +82,9 @@ public class HandManager : MonoBehaviour
     [Header("Areas")]
     public GameObject cardPrefab;
     public Transform handArea;
-    public Transform lockedHandArea;
+    [UnityEngine.Serialization.FormerlySerializedAs("lockedHandArea")]
+    public Transform tribeSelectedPanel;
+    public Transform tribeLockedPanel;
     public Transform deckPileArea;
     public Transform battleZone;
     public Transform discardPileArea;
@@ -97,6 +99,7 @@ public class HandManager : MonoBehaviour
     public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
     public float discardScale = 0.8f;
     public float planningTime = 60f;
+    public float tribePanelSpacing = -40f; // Control spacing in the inspector
 
     [Header("Details UI")]
     public GameObject detailsPanel;
@@ -186,6 +189,33 @@ public class HandManager : MonoBehaviour
 
         roundNumber = 1;
         UpdateRoundUI();
+
+        if (tribeSelectedPanel != null)
+        {
+            HorizontalLayoutGroup hlg = tribeSelectedPanel.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = tribeSelectedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            // Always apply settings to ensure spacing is correct
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.spacing = tribePanelSpacing; 
+        }
+
+        if (tribeLockedPanel != null)
+        {
+            HorizontalLayoutGroup hlg = tribeLockedPanel.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = tribeLockedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
+            
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = false;
+            hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false;
+            hlg.childForceExpandHeight = false;
+            hlg.spacing = tribePanelSpacing; 
+        }
 
         SpawnDeck();
         StartCoroutine(StartPlanningPhaseSequence());
@@ -561,6 +591,7 @@ public class HandManager : MonoBehaviour
         inputLocked = false;
         SetEnergyUIActive(true);
         UpdateEnergyUI();
+        UpdateHandPagination();
     }
 
     IEnumerator FadeTextInAndOut(Text textObj, float displayDuration)
@@ -592,6 +623,7 @@ public class HandManager : MonoBehaviour
         lockInButton.gameObject.SetActive(false);
         if (timerText != null) timerText.text = "";
         SetEnergyUIActive(false);
+        UpdateHandPagination();
 
         foreach (CardUI card in selectedCardsUI)
         {
@@ -599,7 +631,7 @@ public class HandManager : MonoBehaviour
             if (display != null && display.cardData != null && display.cardData.effectID == "def_agong")
                 agongPlayedThisRound = true;
 
-            card.transform.SetParent(lockedHandArea);
+            card.transform.SetParent(tribeLockedPanel);
             // Disable glow when card is locked in
             if (card.glowOverlay != null) card.glowOverlay.SetGlowEnabledImmediate(false);
             if (card.selectionBorder != null) card.selectionBorder.SetActive(false);
@@ -688,7 +720,7 @@ public class HandManager : MonoBehaviour
 
     void ProcessBakunawaTurnDecision()
     {
-        int playerCards = lockedHandArea.childCount;
+        int playerCards = tribeLockedPanel.childCount;
         int enemyCards = 0;
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.lockedArea != null)
             enemyCards = BakunawaAI.Instance.lockedArea.childCount;
@@ -743,7 +775,7 @@ public class HandManager : MonoBehaviour
     {
         inputLocked = false;
 
-        if (lockedHandArea.childCount == 0)
+        if (tribeLockedPanel.childCount == 0)
         {
             playCardButton.gameObject.SetActive(false);
             StartCoroutine(BakunawaSoloPlaySequence());
@@ -827,7 +859,7 @@ public class HandManager : MonoBehaviour
 
         if (!playerGoesFirst)
         {
-            if (lockedHandArea.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
+            if (tribeLockedPanel.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
             else ContinueBattleLoop();
         }
         else
@@ -838,7 +870,7 @@ public class HandManager : MonoBehaviour
 
     void ContinueBattleLoop()
     {
-        if (lockedHandArea.childCount > 0)
+        if (tribeLockedPanel.childCount > 0)
         {
             playCardButton.interactable = true;
         }
@@ -1003,7 +1035,7 @@ public class HandManager : MonoBehaviour
             }
 
             selectedCardsUI.Add(cardUI);
-            cardUI.transform.SetParent(lockedHandArea);
+            cardUI.transform.SetParent(tribeSelectedPanel);
             cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
             cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
             // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
@@ -1064,13 +1096,27 @@ public class HandManager : MonoBehaviour
         }
 
         // Update Buttons
-        if (prevPageBtn != null) prevPageBtn.interactable = (currentPage > 0);
-        if (nextPageBtn != null) nextPageBtn.interactable = (currentPage < maxPage);
+        bool showPagination = isPlanningPhase;
+
+        if (prevPageBtn != null)
+        {
+            prevPageBtn.gameObject.SetActive(showPagination);
+            if (showPagination) prevPageBtn.interactable = (currentPage > 0);
+        }
+        if (nextPageBtn != null)
+        {
+            nextPageBtn.gameObject.SetActive(showPagination);
+            if (showPagination) nextPageBtn.interactable = (currentPage < maxPage);
+        }
 
         // Update Text
         if (pageIndicatorText != null)
         {
-            pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+            pageIndicatorText.gameObject.SetActive(showPagination);
+            if (showPagination)
+            {
+                pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+            }
         }
 
         // Force Layout Update for the visible cards

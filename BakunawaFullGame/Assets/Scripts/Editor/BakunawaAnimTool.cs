@@ -3,7 +3,7 @@ using UnityEditor;
 
 public class BakunawaAnimTool : EditorWindow
 {
-    [MenuItem("Tools/Refine Bakunawa Motion (Stretch & Bob)")]
+    [MenuItem("Tools/Refine Bakunawa Motion (Chess Piece Float)")]
     public static void Refine()
     {
         // Try to find the object. It might be named "TowerDragon" (from builder) or "Bakunawa" (if renamed) or have the dragon sprite
@@ -21,21 +21,20 @@ public class BakunawaAnimTool : EditorWindow
 
             // 1. Position Setup (Up and Down)
             SetPrivateField(anim, "animatePosition", true);
-            // Move up/down by 20 units
-            SetPrivateField(anim, "moveAmount", new Vector2(0f, 20f)); 
+            // Move up/down by 10 units (Subtle)
+            SetPrivateField(anim, "moveAmount", new Vector2(0f, 10f)); 
             
-            // 2. Scale Setup (Stretch)
-            SetPrivateField(anim, "animateScale", true);
-            // X goes down (thinner) when Y goes up (taller/higher) -> Classic squash/stretch
-            // When Sin is 1 (UP): Y adds 0.05, X subtracts 0.03
-            SetPrivateField(anim, "scaleAmount", new Vector2(-0.03f, 0.05f)); 
+            // 2. Scale Setup (Rigid - Like a Chess Piece)
+            SetPrivateField(anim, "animateScale", false);
+            // Reset scale amount just in case, though bool controls it
+            SetPrivateField(anim, "scaleAmount", Vector2.zero); 
 
-            // 3. Sync Speed
-            float speed = 2.0f; // A bit faster for a "hovering" feel
+            // 3. Speed
+            float speed = 1.0f; // Slow and steady
             SetPrivateField(anim, "moveSpeed", speed);
-            SetPrivateField(anim, "scaleSpeed", speed); // Speeds MUST match for sync
+            SetPrivateField(anim, "scaleSpeed", speed); 
 
-            Debug.Log($"Applied synchronized Stretch & Bob animation to {target.name}.");
+            Debug.Log($"Applied synchronized Chess Piece Float animation to {target.name}.");
         }
         else
         {

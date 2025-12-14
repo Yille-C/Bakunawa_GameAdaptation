@@ -300,7 +300,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (_canvas == null) return;
         
         bool isInLockedArea = false;
-        if (HandManager.Instance != null && transform.parent == HandManager.Instance.lockedHandArea)
+        if (HandManager.Instance != null && (transform.parent == HandManager.Instance.tribeSelectedPanel || transform.parent == HandManager.Instance.tribeLockedPanel))
             isInLockedArea = true;
 
         // If in locked area, we DO NOT want to pop on top of the hand.
@@ -337,14 +337,14 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Skip animation for handArea - CurvedHandLayout handles that
         if (p == HandManager.Instance.handArea) return;
         
-        // Only animate in lockedHandArea
-        if (p != HandManager.Instance.lockedHandArea) return;
+        // Only animate in tribeSelectedPanel or tribeLockedPanel
+        if (p != HandManager.Instance.tribeSelectedPanel && p != HandManager.Instance.tribeLockedPanel) return;
 
         // Calculate Target Scale & Position for locked hand area
         Vector3 targetScaleVec = baseScale;
         float targetY = 0f;
 
-        if (p == HandManager.Instance.lockedHandArea)
+        if (p == HandManager.Instance.tribeSelectedPanel || p == HandManager.Instance.tribeLockedPanel)
         {
             // NEW LOGIC: Use specific scale for locked cards and sit flat in the panel
             float scale = (HandManager.Instance != null) ? HandManager.Instance.lockedScale : 1f;
