@@ -57,6 +57,10 @@ public class CurvedHandLayout : MonoBehaviour
     [Tooltip("Z spacing between cards (for proper layering).")]
     public float zSpacing = -1f;
 
+    [Header("Dynamic Spacing")]
+    [Tooltip("Distance neighbors move away when a card is hovered.")]
+    public float hoverSeparation = 0f;
+
     // Internal data
     private List<CardLayoutData> cardData = new List<CardLayoutData>();
     private bool layoutDirty = true;
@@ -187,6 +191,19 @@ public class CurvedHandLayout : MonoBehaviour
 
     void AnimateCards()
     {
+        // 1. Find which card is hovered (if any)
+        int hoveredIndex = -1;
+        for (int i = 0; i < cardData.Count; i++)
+        {
+             if (cardData[i].cardTransform == null) continue;
+             CardUI ui = cardData[i].cardTransform.GetComponent<CardUI>();
+             if (ui != null && ui.IsHovered) 
+             {
+                 hoveredIndex = i;
+                 break;
+             }
+        }
+
         for (int i = 0; i < cardData.Count; i++)
         {
             CardLayoutData data = cardData[i];
@@ -196,6 +213,7 @@ public class CurvedHandLayout : MonoBehaviour
             // Get additional offsets from CardUI hover/selection state
             Vector3 additionalOffset = Vector3.zero;
             Vector3 additionalScale = data.targetScale;
+            Quaternion finalTargetRotation = data.targetRotation;
 
             CardUI cardUI = data.cardTransform.GetComponent<CardUI>();
             if (cardUI != null)
@@ -204,17 +222,35 @@ public class CurvedHandLayout : MonoBehaviour
                 {
                     additionalOffset.y += selectedLift;
                     additionalScale = data.targetScale * selectedScale;
-                    // Bring selected card to front
-                    additionalOffset.z = -10f;
+                    // Bring selected card significantly to front
+                    additionalOffset.z = -50f;
+                    // Straighten the card so it's easy to read
+                    finalTargetRotation = Quaternion.identity;
+                    
                 }
                 else if (IsCardHovered(cardUI))
                 {
                     additionalOffset.y += hoverLift;
                     additionalScale = data.targetScale * hoverScale;
-                    // Bring hovered card slightly forward
-                    additionalOffset.z = -5f;
+                    // Bring hovered card significantly forward to overlap neighbors
+                    additionalOffset.z = -40f;
+                    // Straighten the card so it's easy to read
+                    finalTargetRotation = Quaternion.identity;
                 }
             }
+
+            // --- SEPARATION LOGIC ---
+            // If some card is hovered, push neighbors away
+            if (hoveredIndex != -1 && i != hoveredIndex)
+            {
+                // If this card is to the left of the hovered card -> push left
+                if (i < hoveredIndex)
+                    additionalOffset.x -= hoverSeparation;
+                // If this card is to the right of the hovered card -> push right
+                else if (i > hoveredIndex)
+                    additionalOffset.x += hoverSeparation;
+            }
+            // -------------------------
 
             Vector3 finalTargetPos = data.targetPosition + additionalOffset;
             Vector3 finalTargetScale = additionalScale;
@@ -228,7 +264,7 @@ public class CurvedHandLayout : MonoBehaviour
             );
             data.cardTransform.localRotation = Quaternion.Slerp(
                 data.cardTransform.localRotation, 
-                data.targetRotation, 
+                finalTargetRotation, 
                 speed
             );
             data.cardTransform.localScale = Vector3.Lerp(

@@ -43,6 +43,10 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     public bool IsHovered => isHovered; // Public property for CurvedHandLayout
     public bool IsSelected { get; private set; } = false; // Public property for read access logic
 
+    // Sorting Components
+    private Canvas _canvas;
+    private GraphicRaycaster _raycaster;
+
     private CardData data;
     private bool isPressed = false;
     private float pressTimer = 0f;
@@ -59,6 +63,16 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         baseScale = transform.localScale;
         // Keep initial scale from the prefab or set to one
         if (baseScale == Vector3.zero) baseScale = Vector3.one;
+
+        // Ensure we have a Canvas for sorting override (to pop hovered cards to front)
+        _canvas = GetComponent<Canvas>();
+        if (_canvas == null) _canvas = gameObject.AddComponent<Canvas>();
+
+        _raycaster = GetComponent<GraphicRaycaster>();
+        if (_raycaster == null) _raycaster = gameObject.AddComponent<GraphicRaycaster>();
+
+        // Default to not overriding
+        if (_canvas != null) _canvas.overrideSorting = false;
         
         // Initialize glow overlay - auto-create if not assigned
         if (glowOverlay == null)
@@ -239,6 +253,26 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         }
         
         UpdateAnimation();
+        UpdateSorting();
+    }
+
+    void UpdateSorting()
+    {
+        if (_canvas == null) return;
+
+        // If hovered or selected, render on top of others
+        bool shouldPop = (isHovered || IsSelected) && !isLocked && !isEnemy && !isDeckMode;
+
+        if (shouldPop)
+        {
+            _canvas.overrideSorting = true;
+            // Selected cards slightly higher than just hovered ones
+            _canvas.sortingOrder = IsSelected ? 21 : 20; 
+        }
+        else
+        {
+            _canvas.overrideSorting = false;
+        }
     }
 
     void UpdateAnimation()

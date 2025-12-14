@@ -107,6 +107,13 @@ public class HandManager : MonoBehaviour
     public Text detailAttack;
     // -------------------
 
+    [Header("Hand Pagination")]
+    public int cardsPerPage = 5;
+    public Button prevPageBtn;
+    public Button nextPageBtn;
+    public Text pageIndicatorText;
+    private int currentPage = 0;
+
     [Header("Data")]
     public List<CardData> myDeck;
 
@@ -161,6 +168,17 @@ public class HandManager : MonoBehaviour
 
         if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
         if (mainMenuButton != null) mainMenuButton.onClick.AddListener(GoToMainMenu);
+
+        if (prevPageBtn != null) 
+        {
+            prevPageBtn.onClick.AddListener(PrevHandPage);
+            EnsureButtonAnimation(prevPageBtn);
+        }
+        if (nextPageBtn != null) 
+        {
+            nextPageBtn.onClick.AddListener(NextHandPage);
+            EnsureButtonAnimation(nextPageBtn);
+        }
 
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
@@ -962,7 +980,8 @@ public class HandManager : MonoBehaviour
         else TriggerGameOver("Draw");
     }
 
-    void ReturnCardToHand(CardUI card) { card.transform.SetParent(handArea); card.transform.localScale = Vector3.one; card.ResetToHandMode(); if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.OnCardAdded(); }
+    // moved logic to end of file to override
+
     void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
     void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
@@ -971,5 +990,101 @@ public class HandManager : MonoBehaviour
     IEnumerator ShowWarningSequence() { if (warningText != null) { warningText.gameObject.SetActive(true); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, 1); yield return new WaitForSeconds(0.5f); float duration = 1.0f; float currentTime = 0f; while (currentTime < duration) { float alpha = Mathf.Lerp(1f, 0f, currentTime / duration); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, alpha); currentTime += Time.deltaTime; yield return null; } warningText.gameObject.SetActive(false); } }
     int GetCardCost(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null && display.cardData != null) return display.cardData.energyCost; if (card.costText != null && int.TryParse(card.costText.text, out int val)) return val; return 0; }
     int GetCardAttack(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null) return display.currentAttack; if (card.attackText != null && int.TryParse(card.attackText.text, out int val)) return val; return 0; }
-    void SpawnDeck() { foreach (CardData card in myDeck) { GameObject newCard = Instantiate(cardPrefab, handArea); CardUI ui = newCard.GetComponent<CardUI>(); ui.Setup(card); CardDisplay display = newCard.GetComponent<CardDisplay>(); if (display != null) { display.cardData = card; display.currentAttack = card.attackValue; } } if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate(); }
+    void SpawnDeck() 
+    { 
+        foreach (CardData card in myDeck) 
+        { 
+            GameObject newCard = Instantiate(cardPrefab, handArea); 
+            CardUI ui = newCard.GetComponent<CardUI>(); 
+            ui.Setup(card); 
+            CardDisplay display = newCard.GetComponent<CardDisplay>(); 
+            if (display != null) 
+            { 
+                display.cardData = card; 
+                display.currentAttack = card.attackValue; 
+            } 
+        } 
+        UpdateHandPagination();
+    }
+
+    // --- PAGINATION LOGIC ---
+    public void UpdateHandPagination()
+    {
+        if (handArea == null) return;
+
+        int totalCards = handArea.childCount;
+        int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
+        
+        if (currentPage > maxPage) currentPage = maxPage;
+        if (currentPage < 0) currentPage = 0;
+
+        int startIndex = currentPage * cardsPerPage;
+        int endIndex = startIndex + cardsPerPage;
+
+        // Iterate through all cards in hand
+        for (int i = 0; i < totalCards; i++)
+        {
+            Transform child = handArea.GetChild(i);
+            bool shouldBeVisible = (i >= startIndex && i < endIndex);
+            child.gameObject.SetActive(shouldBeVisible);
+        }
+
+        // Update Buttons
+        if (prevPageBtn != null) prevPageBtn.interactable = (currentPage > 0);
+        if (nextPageBtn != null) nextPageBtn.interactable = (currentPage < maxPage);
+
+        // Update Text
+        if (pageIndicatorText != null)
+        {
+            pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
+        }
+
+        // Force Layout Update for the visible cards
+        if (CurvedHandLayout.Instance != null) 
+        {
+            CurvedHandLayout.Instance.ForceLayoutUpdate();
+        }
+    }
+
+    void NextHandPage()
+    {
+        int totalCards = handArea.childCount;
+        int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
+        if (currentPage < maxPage)
+        {
+            currentPage++;
+            UpdateHandPagination();
+        }
+    }
+
+    void PrevHandPage()
+    {
+        if (currentPage > 0)
+        {
+            currentPage--;
+            UpdateHandPagination();
+        }
+    }
+
+    // Overwrite ReturnCardToHand to use pagination
+    void ReturnCardToHand(CardUI card) 
+    { 
+        card.transform.SetParent(handArea); 
+        card.transform.localScale = Vector3.one; 
+        card.ResetToHandMode(); 
+        
+        // Ensure the card is counted in pagination
+        UpdateHandPagination(); 
+    }
+
+    void EnsureButtonAnimation(Button btn)
+    {
+        if (btn != null)
+        {
+            if (btn.gameObject.GetComponent<UIButtonAnimation>() == null)
+            {
+                btn.gameObject.AddComponent<UIButtonAnimation>();
+            }
+        }
+    }
 }
