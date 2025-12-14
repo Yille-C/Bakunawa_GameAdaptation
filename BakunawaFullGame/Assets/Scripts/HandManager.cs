@@ -145,240 +145,247 @@ public class HandManager : MonoBehaviour
         Instance = this;
     }
 
-    // [Enhanced] Multi-Phase Card Clash Animation
+    // [Enhanced] Multi-Phase Card Clash Animation - V2 (Root Canvas Detachment)
     IEnumerator AnimateCardClash(CardUI playerCard, CardUI enemyCard)
     {
-        // === PHASE 0: SETUP ===
-        Vector3 pStartPos = playerCard.transform.position; // Current Drop Pos
-        Vector3 eStartPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
-        Quaternion pOriginalRot = Quaternion.identity;
-        Quaternion eOriginalRot = Quaternion.identity;
+        // === PHASE 0: SETUP & DETACHMENT ===
+        // 1. Capture Original Context
+        Transform pOriginalParent = playerCard.transform.parent;
+        Transform eOriginalParent = (enemyCard != null) ? enemyCard.transform.parent : null;
+        
+        // 2. Determine "Slot" Position in BattleZone (Where they should end up)
+        // We do this by temporarily parenting them to battleZone (if not already) and forcing a layout calc,
+        // OR we can just simple-math it if the layout is predictable.
+        // For reliability, let's assume specific "Left" and "Right" slots in the battle zone for visual clarity,
+        // or just let them return to the battleZone container at the end.
+        
+        // For the animations, we want to work in SCREEN SPACE / ROOT CANVAS SPACE to avoid layout fighting.
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
+        Transform rootT = rootCanvas.transform;
 
-        // Capture Target Slot Positions (Where they return to)
-        // Ensure standard scaling
+        // Capture Start Positions (World Space)
+        Vector3 pStartPos = playerCard.transform.position;
+        Vector3 eStartPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+
+        // 3. Move to Root - This "frees" them from the LayoutGroup
+        playerCard.transform.SetParent(rootT, true); // worldPositionStays = true
+        if (enemyCard != null) enemyCard.transform.SetParent(rootT, true);
+
+        // Ensure they render on top
+        playerCard.transform.SetAsLastSibling();
+        if (enemyCard != null) enemyCard.transform.SetAsLastSibling();
+
+        // Standardize Scale
         playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
 
-        // Rebuild Layouts to get Slot Positions
-        LayoutElement pLe = playerCard.GetComponent<LayoutElement>();
-        LayoutElement eLe = (enemyCard != null) ? enemyCard.GetComponent<LayoutElement>() : null;
-        if (pLe != null) pLe.ignoreLayout = false;
-        if (eLe != null) eLe.ignoreLayout = false;
-
-        if (playerCard.transform.parent != null) LayoutRebuilder.ForceRebuildLayoutImmediate(playerCard.transform.parent as RectTransform);
-        if (enemyCard != null && enemyCard.transform.parent != null && enemyCard.transform.parent != playerCard.transform.parent)
-             LayoutRebuilder.ForceRebuildLayoutImmediate(enemyCard.transform.parent as RectTransform);
+        // Define Key Positions relative to Screen Center
+        // We use the battleZone position as the visual center anchor
+        Vector3 centerPoint = battleZone.position;
+        float verticalOffset = 250f; // How far up/down they start the clash
         
-        Vector3 pSlotPos = playerCard.transform.position;
-        Vector3 eSlotPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+        Vector3 pReadyPos = centerPoint + new Vector3(0, -verticalOffset, 0);
+        Vector3 eReadyPos = centerPoint + new Vector3(0, verticalOffset, 0); // Enemy comes from top
+        if (enemyCard == null) eReadyPos = centerPoint; // Dummy target center
 
-        // Restore visual start for animation
-        playerCard.transform.position = pStartPos;
-        if (enemyCard != null) enemyCard.transform.position = eStartPos;
+        // define Clash Center
+        Vector3 clashPoint = centerPoint; // Exact center
 
-        // Disable Layout
-        if (pLe != null) pLe.ignoreLayout = true;
-        if (eLe != null) eLe.ignoreLayout = true;
-        Canvas.ForceUpdateCanvases();
-
-        // Standardize Alignment: Launch Positions (Center Line)
-        Vector3 clashCenter = battleZone.position;
-        float launchDist = 250f;
-        // Use local offset relative to clashCenter to ensure vertical alignment
-        Vector3 pLaunchPos = clashCenter + new Vector3(0, -launchDist, 0);
-        Vector3 eLaunchPos = clashCenter + new Vector3(0, launchDist, 0);
-        if (enemyCard == null) eLaunchPos = clashCenter; // Dummy target
-
-        // === PHASE 0.5: GATHERING (0.25s) ===
-        // Fly to Launch Positions (Center Stage)
-        float gatherTime = 0.25f;
+        // === PHASE 1: WINDUP / ALIGN (0.4s) ===
+        // Move from wherever they are (Hand/Deck) to the "Ready" positions
+        float windupTime = 0.4f;
         float elapsed = 0f;
-        while(elapsed < gatherTime)
-        {
-             float t = elapsed / gatherTime;
-             t = t * t * (3f - 2f * t); // SmoothStep
-
-             playerCard.transform.position = Vector3.Lerp(pStartPos, pLaunchPos, t);
-             // Also reset rotation if it was crazy
-             playerCard.transform.rotation = Quaternion.Lerp(playerCard.transform.rotation, Quaternion.identity, t);
-
-             if (enemyCard != null)
-             {
-                 enemyCard.transform.position = Vector3.Lerp(eStartPos, eLaunchPos, t);
-                 enemyCard.transform.rotation = Quaternion.Lerp(enemyCard.transform.rotation, Quaternion.identity, t);
-             }
-             elapsed += Time.deltaTime;
-             yield return null;
-        }
-        playerCard.transform.position = pLaunchPos;
-        if (enemyCard != null) enemyCard.transform.position = eLaunchPos;
-
-
-        // DYNAMIC HEIGHT CALCULATION:
-        float actualHeight = 200f; // Default fallback
-        RectTransform pRect = playerCard.GetComponent<RectTransform>();
-        if (pRect != null) actualHeight = pRect.rect.height * playCardScale;
         
-        float cardHalfHeight = actualHeight / 2f; 
-        float collisionGap = 20f;    // Gap between cards at collision
+        Quaternion pStartRot = playerCard.transform.rotation;
+        Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
 
-        // === PHASE 1: LEVITATE (0.3s) ===
-        // Cards lift slightly from Launch Position
-        float levitateHeight = 40f;
-        Vector3 pLevitatePos = pLaunchPos + new Vector3(0, levitateHeight, 0);
-        Vector3 eLevitatePos = eLaunchPos + new Vector3(0, -levitateHeight, 0);
-
-        float levitateTime = 0.3f;
-        elapsed = 0f;
-        while (elapsed < levitateTime)
+        while (elapsed < windupTime)
         {
-            float t = elapsed / levitateTime;
-            t = 1f - (1f - t) * (1f - t); // Ease Out
+            float t = elapsed / windupTime;
+            t = t * t * (3f - 2f * t); // SmoothStep
 
-            playerCard.transform.position = Vector3.Lerp(pLaunchPos, pLevitatePos, t);
-            
-            float scalePulse = 1f + Mathf.Sin(t * Mathf.PI) * 0.05f;
-            playerCard.transform.localScale = new Vector3(playCardScale * scalePulse, playCardScale * scalePulse, playCardScale);
+            playerCard.transform.position = Vector3.Lerp(pStartPos, pReadyPos, t);
+            playerCard.transform.rotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
 
             if (enemyCard != null)
             {
-                enemyCard.transform.position = Vector3.Lerp(eLaunchPos, eLevitatePos, t);
-                enemyCard.transform.localScale = new Vector3(playCardScale * scalePulse, playCardScale * scalePulse, playCardScale);
+                enemyCard.transform.position = Vector3.Lerp(eStartPos, eReadyPos, t);
+                enemyCard.transform.rotation = Quaternion.Lerp(eStartRot, Quaternion.identity, t);
             }
-
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        // === PHASE 2: ANTICIPATION PAUSE (0.2s) ===
-        yield return new WaitForSeconds(0.2f);
-
-        // === PHASE 3: LUNGE TO COLLISION (0.15s) ===
-        // Player moves UP, Enemy moves DOWN, meeting at center with gap
-        Vector3 pCollisionPos = clashCenter + new Vector3(0, -(cardHalfHeight + collisionGap / 2f), 0);
-        Vector3 eCollisionPos = clashCenter + new Vector3(0, cardHalfHeight + collisionGap / 2f, 0);
-
-        if (enemyCard == null) pCollisionPos = clashCenter; // Direct attack
-
-        // Add tilt for dramatic effect
-        Quaternion pTilt = Quaternion.Euler(0, 0, 8);
-        Quaternion eTilt = Quaternion.Euler(0, 0, -8);
-
+        // === PHASE 2: ANTICIPATION (0.15s) ===
+        // Brief pause/pull back before strike
+        yield return new WaitForSeconds(0.1f);
+        
+        // === PHASE 3: LUNGE (0.15s) ===
+        // Smash together!
         float lungeTime = 0.15f;
         elapsed = 0f;
+        
+        // Remove Tilt as requested - keep them straight
+        Quaternion pTilt = Quaternion.identity; 
+        Quaternion eTilt = Quaternion.identity;
+
+        // Dynamic Height Calculation to prevent overlap
+        float actualHeight = 250f; // Default fallback
+        RectTransform pRect = playerCard.GetComponent<RectTransform>();
+        // Check rect height and scale
+        if (pRect != null) actualHeight = pRect.rect.height * playCardScale;
+
+        float cardHalfHeight = actualHeight / 2f;
+        
+        // Calculate Separation
+        // We want them to touch edges (center distance = half height + half height = full height / 2 ?? No)
+        // Center to Center distance must be (h/2) + (h/2) = h.
+        // So offset from center is (h/2).
+        
+        float collisionGap = 0f; // Extra padding if needed
+        float offset = cardHalfHeight + collisionGap;
+
+        Vector3 pImpactPos = clashPoint + new Vector3(0, -offset, 0);
+        Vector3 eImpactPos = clashPoint + new Vector3(0, offset, 0);
+
         while (elapsed < lungeTime)
         {
             float t = elapsed / lungeTime;
-            // Aggressive ease-in (cubic) for building momentum
-            t = t * t * t;
+            t = t * t * t; // Cubic Ease In (Exciting!)
 
-            playerCard.transform.position = Vector3.Lerp(pLevitatePos, pCollisionPos, t);
-            playerCard.transform.rotation = Quaternion.Lerp(pOriginalRot, pTilt, t);
+            playerCard.transform.position = Vector3.Lerp(pReadyPos, pImpactPos, t);
+            // No rotation change needed if we want them straight
+            // playerCard.transform.rotation = Quaternion.Lerp(Quaternion.identity, pTilt, t); 
 
             if (enemyCard != null)
             {
-                enemyCard.transform.position = Vector3.Lerp(eLevitatePos, eCollisionPos, t);
-                enemyCard.transform.rotation = Quaternion.Lerp(eOriginalRot, eTilt, t);
+                enemyCard.transform.position = Vector3.Lerp(eReadyPos, eImpactPos, t);
+                // enemyCard.transform.rotation = Quaternion.Lerp(Quaternion.identity, eTilt, t);
             }
-
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        // Snap to final collision position
-        playerCard.transform.position = pCollisionPos;
-        playerCard.transform.rotation = pTilt;
-        if (enemyCard != null)
-        {
-            enemyCard.transform.position = eCollisionPos;
-            enemyCard.transform.rotation = eTilt;
-        }
-
-        // === PHASE 4: IMPACT - SCREEN SHAKE (0.15s) ===
-        Vector3 camOriginalPos = Camera.main.transform.position;
-        float shakeDuration = 0.15f;
-        float shakeMagnitude = 8f;
-
-        float shakeElapsed = 0f;
-        while (shakeElapsed < shakeDuration)
-        {
-            // Decreasing shake intensity
-            float intensity = 1f - (shakeElapsed / shakeDuration);
-            Vector3 shakeOffset = Random.insideUnitSphere * shakeMagnitude * intensity;
-            shakeOffset.z = 0;
-            Camera.main.transform.position = camOriginalPos + shakeOffset;
-
-            shakeElapsed += Time.deltaTime;
-            yield return null;
-        }
-        Camera.main.transform.position = camOriginalPos;
-
-        // Set Broken State
+        // === PHASE 4: IMPACT (One Frame + Shake) ===
+        // Visuals
         playerCard.SetBroken(true);
         if (enemyCard != null) enemyCard.SetBroken(true);
 
-        // === PHASE 5: BOUNCE BACK (0.2s) ===
-        // Cards recoil from impact
-        float bounceDistance = 80f;
-        Vector3 pBouncePos = pCollisionPos + new Vector3(0, -bounceDistance, 0);
-        Vector3 eBouncePos = (enemyCard != null) ? eCollisionPos + new Vector3(0, bounceDistance, 0) : Vector3.zero;
+        // Screen Shake
+        Vector3 camOriginalPos = Camera.main.transform.position;
+        float shakeDuration = 0.2f;
+        float shakeMagnitude = 10f;
+        float shakeTimer = 0f;
+        
+        // Start Recoil concurrently with shake
+        float recoilTime = 0.3f;
+        Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
+        Vector3 eRecoilPos = eImpactPos + new Vector3(0, 50f, 0);
 
-        float bounceTime = 0.2f;
-        elapsed = 0f;
-        while (elapsed < bounceTime)
+        while (shakeTimer < recoilTime) // Loop for length of recoil
         {
-            float t = elapsed / bounceTime;
-            // Ease out for natural deceleration
-            t = 1f - (1f - t) * (1f - t);
-
-            playerCard.transform.position = Vector3.Lerp(pCollisionPos, pBouncePos, t);
-            playerCard.transform.rotation = Quaternion.Lerp(pTilt, pOriginalRot, t);
-
-            if (enemyCard != null)
+            // Shake Logic
+            if (shakeTimer < shakeDuration)
             {
-                enemyCard.transform.position = Vector3.Lerp(eCollisionPos, eBouncePos, t);
-                enemyCard.transform.rotation = Quaternion.Lerp(eTilt, eOriginalRot, t);
+               Vector3 shakeOffset = Random.insideUnitSphere * shakeMagnitude * (1f - shakeTimer/shakeDuration);
+               shakeOffset.z = 0;
+               Camera.main.transform.position = camOriginalPos + shakeOffset;
             }
+            else Camera.main.transform.position = camOriginalPos;
 
-            elapsed += Time.deltaTime;
+            // Recoil Logic
+            float t = shakeTimer / recoilTime;
+            t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out
+
+            playerCard.transform.position = Vector3.Lerp(pImpactPos, pRecoilPos, t);
+            if (enemyCard != null) enemyCard.transform.position = Vector3.Lerp(eImpactPos, eRecoilPos, t);
+
+            shakeTimer += Time.deltaTime;
             yield return null;
         }
+        Camera.main.transform.position = camOriginalPos; // Ensure reset
 
-        // === PHASE 6: RETURN TO BOARD (0.3s) ===
-        float returnTime = 0.3f;
+        // === PHASE 5: RETURN TO BOARD (0.4s) ===
+        // Return cards to their specific zones (Player Zone / Enemy Zone)
+        
+        if (pOriginalParent != null) playerCard.transform.SetParent(pOriginalParent, true);
+        else playerCard.transform.SetParent(battleZone, true); // Fallback
+
+        if (enemyCard != null)
+        {
+            if (eOriginalParent != null) enemyCard.transform.SetParent(eOriginalParent, true);
+            else enemyCard.transform.SetParent(battleZone, true); // Fallback
+        }
+
+        // We need to know where the LayoutGroup *validly* wants them.
+        
+        LayoutElement pLe = playerCard.GetComponent<LayoutElement>();
+        if (pLe == null) pLe = playerCard.gameObject.AddComponent<LayoutElement>();
+        
+        LayoutElement eLe = (enemyCard != null) ? enemyCard.GetComponent<LayoutElement>() : null;
+
+        // Enable layout momentarily to calculate slot
+        pLe.ignoreLayout = false;
+        if (eLe != null) eLe.ignoreLayout = false;
+        
+        // Force Rebuild on correct parents
+        if (playerCard.transform.parent != null) 
+            LayoutRebuilder.ForceRebuildLayoutImmediate(playerCard.transform.parent as RectTransform);
+            
+        if (enemyCard != null && enemyCard.transform.parent != null && enemyCard.transform.parent != playerCard.transform.parent)
+             LayoutRebuilder.ForceRebuildLayoutImmediate(enemyCard.transform.parent as RectTransform);
+        
+        // Capture Target Positions
+        Vector3 pFinalPos = playerCard.transform.position;
+        Vector3 eFinalPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+
+        // Reset to Recoil pos to start return flight
+        // Requires disabling layout again so we can move them freely
+        pLe.ignoreLayout = true;
+        if (eLe != null) eLe.ignoreLayout = true;
+        
+        playerCard.transform.position = pRecoilPos;
+        if (enemyCard != null) enemyCard.transform.position = eRecoilPos;
+        
+        // Fly Home
+        float returnTime = 0.4f;
         elapsed = 0f;
-        while (elapsed < returnTime)
+        
+        Quaternion pRecoilRot = playerCard.transform.rotation; 
+        Quaternion eRecoilRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
+
+        while(elapsed < returnTime)
         {
             float t = elapsed / returnTime;
-            // Smooth ease in-out
-            t = t < 0.5f ? 2f * t * t : 1f - Mathf.Pow(-2f * t + 2f, 2f) / 2f;
+            t = t * t * (3f - 2f * t);
 
-            playerCard.transform.position = Vector3.Lerp(pBouncePos, pSlotPos, t);
-
+            playerCard.transform.position = Vector3.Lerp(pRecoilPos, pFinalPos, t);
+            playerCard.transform.rotation = Quaternion.Lerp(pRecoilRot, Quaternion.identity, t);
+            
             if (enemyCard != null)
             {
-                enemyCard.transform.position = Vector3.Lerp(eBouncePos, eSlotPos, t);
+                 enemyCard.transform.position = Vector3.Lerp(eRecoilPos, eFinalPos, t);
+                 enemyCard.transform.rotation = Quaternion.Lerp(eRecoilRot, Quaternion.identity, t);
             }
-
             elapsed += Time.deltaTime;
             yield return null;
         }
 
         // === CLEANUP ===
         // Restore final positions and re-enable layout
-        playerCard.transform.position = pSlotPos;
+        playerCard.transform.position = pFinalPos;
         playerCard.transform.rotation = Quaternion.identity;
         playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        pLe.ignoreLayout = false;
 
         if (enemyCard != null)
         {
-            enemyCard.transform.position = eSlotPos;
+            enemyCard.transform.position = eFinalPos;
             enemyCard.transform.rotation = Quaternion.identity;
             enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+            eLe.ignoreLayout = false;
         }
-
-        if (pLe != null) pLe.ignoreLayout = false;
-        if (eLe != null) eLe.ignoreLayout = false;
     }
 
     void Start()
