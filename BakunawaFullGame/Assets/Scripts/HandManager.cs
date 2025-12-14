@@ -100,6 +100,7 @@ public class HandManager : MonoBehaviour
     public float discardScale = 0.8f;
     public float planningTime = 60f;
     public float tribePanelSpacing = -40f; // Control spacing in the inspector
+    public float clashDuration = 0.5f;
 
     [Header("Details UI")]
     public GameObject detailsPanel;
@@ -142,6 +143,89 @@ public class HandManager : MonoBehaviour
     void Awake()
     {
         Instance = this;
+    }
+
+    // [New] Animation Coroutine
+    IEnumerator AnimateCardClash(CardUI playerCard, CardUI enemyCard)
+    {
+        // 1. Setup for Clash
+        // We will move them to a "Clash Position" relative to the Battle Zone
+        // BattleZone is usually centered.
+        
+        // Disable layout control temporarily so we can animate positions
+        LayoutElement pLe = playerCard.GetComponent<LayoutElement>();
+        if (pLe != null) pLe.ignoreLayout = true;
+        LayoutElement eLe = (enemyCard != null) ? enemyCard.GetComponent<LayoutElement>() : null;
+        if (eLe != null) eLe.ignoreLayout = true;
+
+        Vector3 pOriginalPos = playerCard.transform.position;
+        Vector3 eOriginalPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+
+        // Parent to high level canvas (like handArea parent) just to be sure they are on top? 
+        // Or keep in BattleZone but use world position? 
+        // Easiest is to keep in BattleZone but manipulate localPosition if BattleZone is centered.
+        // Assuming BattleZone is a HorizontalLayoutGroup, disabling ignoreLayout lets us move them.
+        // Let's assume BattleZone is roughly at (0,0) of its parent.
+        
+        // Start positions: Player Left (-200), Enemy Right (+200) relative to center?
+        // Or just use their current positions and lunge them.
+        // If they are just added to BattleZone, the LayoutGroup might have already positioned them depending on execution order.
+        // Force update layout first?
+        Canvas.ForceUpdateCanvases();
+
+        Transform clashParent = this.transform.root; // Clash on top of everything? Or just BattleZone.
+        // Let's use BattleZone but ensure we are controlling position.
+        
+        // Define Clash Center
+        Vector3 clashCenter = battleZone.position; 
+        
+        // Prepare Positions
+        Vector3 pStart = clashCenter + new Vector3(-300, 0, 0);
+        Vector3 eStart = clashCenter + new Vector3(300, 0, 0);
+
+        // If Enemy is null (direct attack), animate Player hitting center
+        if (enemyCard == null) eStart = clashCenter; // Target is just center
+
+        // Set to Start
+        playerCard.transform.position = pStart;
+        if (enemyCard != null) enemyCard.transform.position = eStart;
+
+        // 2. Lunge to Center
+        float lungeTime = 0.2f;
+        float elapsed = 0f;
+        while(elapsed < lungeTime)
+        {
+            float t = elapsed / lungeTime;
+            // Ease In
+            t = t * t; 
+            
+            playerCard.transform.position = Vector3.Lerp(pStart, clashCenter + new Vector3(-50, 0, 0), t);
+            if (enemyCard != null) enemyCard.transform.position = Vector3.Lerp(eStart, clashCenter + new Vector3(50, 0, 0), t);
+            
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 3. Impact / Shake
+        // Camera Shake or Object Shake could go here
+        
+        // 4. Set Broken
+        playerCard.SetBroken(true);
+        if (enemyCard != null) enemyCard.SetBroken(true);
+
+        // 5. Short Pause / Recoil
+        yield return new WaitForSeconds(0.2f);
+
+        // 6. Return to "Slot"
+        // Since we are using a LayoutGroup in BattleZone, we just re-enable the layout element
+        // and let the system snap them to the correct grid position (History).
+        
+        if (pLe != null) pLe.ignoreLayout = false;
+        if (eLe != null) eLe.ignoreLayout = false;
+        
+        // Reset scale just in case
+        playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+        if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
     }
 
     void Start()
@@ -851,7 +935,10 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            RecalculateBattleEffects();
+            RecalculateBattleEffects(); // This puts card in battleZone and updates state
+
+            // NEW: Animate Clash
+            yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
             if (ScoreManager.Instance != null)
             {
@@ -862,6 +949,10 @@ public class HandManager : MonoBehaviour
         }
         else
         {
+             // Direct Attack (No enemy card)
+             // Animate just Player Card hitting 'something'
+             yield return StartCoroutine(AnimateCardClash(playerCard, null));
+
             if (ScoreManager.Instance != null)
             {
                 int pAtk = GetCardAttack(playerCard);
@@ -875,8 +966,12 @@ public class HandManager : MonoBehaviour
 
     IEnumerator ResolveImmediateClash(CardUI playerCard, CardUI enemyCard)
     {
-        yield return new WaitForSeconds(0.5f);
+        // OLD: yield return new WaitForSeconds(0.5f);
+        
+        // NEW: Animate Clash
+        yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
+        // Score Resolution happens AFTER clash
         int pAtk = GetCardAttack(playerCard);
         int eAtk = (enemyCard != null) ? GetCardAttack(enemyCard) : 0;
 

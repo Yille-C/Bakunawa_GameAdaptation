@@ -23,6 +23,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     [Header("Card States")]
     public GameObject cardBackObject;
     public GameObject lockedArtObject;
+    public GameObject brokenVisuals; // New "Broken" state visual
 
     [Header("Locked Info References")]
     public Text lockedCostObject;
@@ -114,6 +115,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (glowOverlay != null) glowOverlay.SetGlowEnabledImmediate(false);
         if (cardBackObject != null) cardBackObject.SetActive(false);
         if (lockedArtObject != null) lockedArtObject.SetActive(false);
+        if (brokenVisuals != null) brokenVisuals.SetActive(false);
 
         SetVisualsVisible(true);
         if (cardFrameImage != null) cardFrameImage.color = Color.white;
@@ -127,6 +129,16 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         isLocked = locked;
         if (lockedArtObject != null) lockedArtObject.SetActive(isLocked);
         SetVisualsVisible(!isLocked);
+    }
+    
+    public void SetBroken(bool broken)
+    {
+        if (brokenVisuals != null) brokenVisuals.SetActive(broken);
+        // Optional: darken the card frame to indicate damage
+        if (cardFrameImage != null)
+        {
+             cardFrameImage.color = broken ? new Color(0.7f, 0.7f, 0.7f) : Color.white;
+        }
     }
 
     void SetVisualsVisible(bool isVisible)
