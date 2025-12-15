@@ -99,7 +99,7 @@ public class HandManager : MonoBehaviour
     public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
     public float discardScale = 0.8f;
     public float planningTime = 60f;
-    public float tribePanelSpacing = -40f; // Control spacing in the inspector
+    public float tribePanelSpacing = -90f; // Control spacing in the inspector
     public float clashDuration = 0.5f;
 
     [Header("Details UI")]
@@ -567,6 +567,9 @@ public class HandManager : MonoBehaviour
 
     void Start()
     {
+        // Override Inspector value to ensure correct spacing
+        tribePanelSpacing = -90f;
+
         // UI Cleanup
         detailsPanel.SetActive(false);
         if (warningText != null) warningText.gameObject.SetActive(false);
@@ -1541,6 +1544,9 @@ public class HandManager : MonoBehaviour
         
         UpdateEnergyUI(); 
         
+        // Fix: Update spacing for the selected panel to prevent overlapping
+        UpdateContainerSpacing(tribeSelectedPanel as RectTransform);
+        
         // Force layout update for the hand since a card left/entered
         if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate();
         
@@ -1768,7 +1774,17 @@ public class HandManager : MonoBehaviour
         // Get Reference Card Width
         float cardWidth = 0f;
         RectTransform child = container.GetChild(0) as RectTransform;
-        if (child != null) cardWidth = child.rect.width * child.localScale.x;
+        
+        // Fix: Use lockedScale for intended target size if in locked/selected panels to avoid animation jitter
+        float contentScale = 1f;
+        if (child != null) contentScale = child.localScale.x;
+        
+        if (container == tribeLockedPanel || container == tribeSelectedPanel)
+        {
+            contentScale = lockedScale;
+        }
+
+        if (child != null) cardWidth = child.rect.width * contentScale;
         if (cardWidth <= 10f) cardWidth = 150f; // Safer hardcoded fallback
 
         // HARD CONSTRAINT: 
@@ -1780,7 +1796,7 @@ public class HandManager : MonoBehaviour
         // Desired equation: totalCardWidth + (count - 1) * spacing <= availableWidth
         // spacing <= (availableWidth - totalCardWidth) / (count - 1)
 
-        float maxSpacing = 20f;
+        float maxSpacing = tribePanelSpacing; // Use the inspector setting (-90)
         float dynamicSpacing = (maxVisualWidth - totalCardWidth) / (float)(count - 1);
         
         // Clamp: Never expand beyond maxSpacing, but allow infinite overlap (negative spacing)
