@@ -671,6 +671,7 @@ RectTransform:
   - {fileID: 211859487}
   - {fileID: 1182479339}
   - {fileID: 1585541530}
+  - {fileID: 834069289}
   - {fileID: 1788652074}
   - {fileID: 1013582157}
   - {fileID: 972979581}
@@ -2991,6 +2992,41 @@ RectTransform:
   m_AnchoredPosition: {x: 280.99997, y: 84.077}
   m_SizeDelta: {x: 163.5961, y: 120.78}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &834069288
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 834069289}
+  m_Layer: 5
+  m_Name: BakunawaSelectedPanel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &834069289
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834069288}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 163578466}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -9.5707, y: 158}
+  m_SizeDelta: {x: 1081.8, y: 185.421}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &850786796
 GameObject:
   m_ObjectHideFlags: 0
@@ -4741,8 +4777,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 6.27, y: -403.82}
-  m_SizeDelta: {x: 800.54, y: 185.421}
+  m_AnchoredPosition: {x: -26, y: -331}
+  m_SizeDelta: {x: 1048.1316, y: 185.421}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1182479340
 MonoBehaviour:
