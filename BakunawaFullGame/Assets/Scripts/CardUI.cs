@@ -91,6 +91,49 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     private bool isLocked = false;
     private bool isDeckMode = false;
     private bool isDragging = false;
+    private bool isExhausted = false; // Exhausted cards cannot be selected for 1 round
+    
+    /// <summary>
+    /// Returns true if the card is exhausted (cannot be used this round)
+    /// </summary>
+    public bool IsExhausted => isExhausted;
+    
+    /// <summary>
+    /// Sets the exhausted state. Exhausted cards appear face-down and cannot be selected.
+    /// </summary>
+    public void SetExhausted(bool exhausted)
+    {
+        isExhausted = exhausted;
+        
+        if (isExhausted)
+        {
+            // Show card as face-down/dimmed to indicate exhaustion
+            if (cardBackObject != null) cardBackObject.SetActive(true);
+            
+            // Dim the card
+            CanvasGroup cg = GetComponent<CanvasGroup>();
+            if (cg == null) cg = gameObject.AddComponent<CanvasGroup>();
+            cg.alpha = 0.5f;
+        }
+        else
+        {
+            // Restore normal appearance
+            if (cardBackObject != null) cardBackObject.SetActive(false);
+            
+            CanvasGroup cg = GetComponent<CanvasGroup>();
+            if (cg != null) cg.alpha = 1f;
+        }
+    }
+    
+    /// <summary>
+    /// Clears exhaustion without visual changes (for cleanup)
+    /// </summary>
+    public void ClearExhaustion()
+    {
+        isExhausted = false;
+        CanvasGroup cg = GetComponent<CanvasGroup>();
+        if (cg != null) cg.alpha = 1f;
+    }
 
     public void Setup(CardData cardData)
     {
@@ -668,6 +711,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             if (HandManager.Instance == null) return;
             if (isEnemy) return;
             if (isDeckMode) return;
+            if (isExhausted) return; // Cannot select exhausted cards
 
             if (HandManager.Instance.isPlanningPhase)
             {

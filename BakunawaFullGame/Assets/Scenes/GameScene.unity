@@ -129,6 +129,7 @@ GameObject:
   m_Component:
   - component: {fileID: 59366482}
   - component: {fileID: 59366481}
+  - component: {fileID: 59366483}
   m_Layer: 0
   m_Name: UIAudioManager
   m_TagString: Untagged
@@ -158,10 +159,6 @@ MonoBehaviour:
   - {fileID: 1329366233}
   - {fileID: 918214459}
   - {fileID: 1886671304}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
 --- !u!4 &59366482
 Transform:
   m_ObjectHideFlags: 0
@@ -177,6 +174,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &59366483
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 59366480}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1deff40d037813545a3bd215d0d4a2dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameAudioManager
+  bgmClip: {fileID: 8300000, guid: f93b8574ba4b5a1429cc9ea21a43e940, type: 3}
+  bgmVolume: 0.5
+  playBGMOnStart: 1
+  rainAmbientClip: {fileID: 8300000, guid: 58d1dca0e43af4a488241190b21a5ff2, type: 3}
+  rainVolume: 0.4
+  playRainOnStart: 1
+  thunderClips:
+  - {fileID: 8300000, guid: 5b8d048ad8f9a8441bdf05b67ffc8760, type: 3}
+  - {fileID: 8300000, guid: 189dc02bda3227445814238ba8494f59, type: 3}
+  - {fileID: 8300000, guid: 897957eb140f8f24db7e532ba5956fbe, type: 3}
+  - {fileID: 8300000, guid: bdcb62c3bda8e6d458b651abe9d0deac, type: 3}
+  thunderVolume: 0.8
+  thunderDelayMin: 0.1
+  thunderDelayMax: 0.5
+  thunderPitchVariation: 0.1
+  bgmSource: {fileID: 0}
+  ambientSource: {fileID: 0}
+  sfxSource: {fileID: 0}
 --- !u!1 &66988033
 GameObject:
   m_ObjectHideFlags: 0
@@ -755,6 +782,7 @@ RectTransform:
   - {fileID: 1667524717}
   - {fileID: 1312337271}
   - {fileID: 1893149605}
+  - {fileID: 1811966098}
   - {fileID: 1590190052}
   - {fileID: 949439532}
   - {fileID: 140083889}
@@ -1441,7 +1469,7 @@ MonoBehaviour:
   vignetteIntensity: 0.25
   enableLightning: 1
   lightningInterval: 3
-  hierarchySiblingIndex: 3
+  hierarchySiblingIndex: 26
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -8595,6 +8623,71 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1807298382}
   m_CullTransparentMesh: 1
+--- !u!1 &1811966097
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1811966098}
+  - component: {fileID: 1811966099}
+  m_Layer: 0
+  m_Name: DriftingClouds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1811966098
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1811966097}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -1063.0896}
+  m_LocalScale: {x: 108, y: 108, z: 108}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 163578466}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1811966099
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1811966097}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d689be5f47f8854438d8b644b28a2f74, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DriftingCloudsEffect
+  cloudCount: 20
+  minSpeed: 15
+  maxSpeed: 50
+  minScale: 1
+  maxScale: 3
+  cloudColor: {r: 0.15471691, g: 0.15471691, b: 0.15471691, a: 1}
+  minAlpha: 0.15
+  maxAlpha: 0.5
+  cloudSprite: {fileID: 0}
+  debugHighVisibility: 0
+  verticalSpread: 0.8
+  verticalOffset: 0
+  moveLeftToRight: 1
+  verticalDrift: 15
+  driftSpeed: 0.3
+  enableParallax: 1
+  parallaxLayers: 3
 --- !u!1 &1814319159
 GameObject:
   m_ObjectHideFlags: 0

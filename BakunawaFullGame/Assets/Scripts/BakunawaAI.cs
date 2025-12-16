@@ -173,6 +173,14 @@ public class BakunawaAI : MonoBehaviour
     {
         return myLockedCards.Count > 0;
     }
+    
+    /// <summary>
+    /// Clears the internal locked cards list (used during forfeit cleanup)
+    /// </summary>
+    public void ClearLockedCards()
+    {
+        myLockedCards.Clear();
+    }
 
     public CardUI PlayCard()
     {
@@ -398,6 +406,10 @@ public class BakunawaAI : MonoBehaviour
                 c.transform.SetParent(handArea);
                 c.ResetToHandMode();
                 c.SwitchToDeckMode(true);
+                
+                // Reset any buffs/debuffs when card returns to hand
+                CardDisplay display = c.GetComponent<CardDisplay>();
+                if (display != null) display.ResetStats();
             }
         }
         else
@@ -411,6 +423,10 @@ public class BakunawaAI : MonoBehaviour
             foreach (CardUI c in unused)
             {
                 c.transform.SetParent(handArea);
+                
+                // Reset any buffs/debuffs when card returns to hand
+                CardDisplay display = c.GetComponent<CardDisplay>();
+                if (display != null) display.ResetStats();
             }
         }
     }
@@ -423,6 +439,113 @@ public class BakunawaAI : MonoBehaviour
         card.transform.localScale = new Vector3(discardScale, discardScale, discardScale);
         card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f));
         card.SwitchToDeckMode(faceDown);
+    }
+    
+    /// <summary>
+    /// Animated version of MoveToPile - smoothly moves card to the pile with a curved arc
+    /// </summary>
+    IEnumerator AnimatedMoveToPile(CardUI card, Transform pile, bool faceDown, float duration = 0.4f)
+    {
+        if (card == null) yield break;
+        
+        Vector3 startPos = card.transform.position;
+        Vector3 startScale = card.transform.localScale;
+        Quaternion startRot = card.transform.localRotation;
+        
+        Vector3 endPos = pile.position;
+        Vector3 endScale = new Vector3(discardScale, discardScale, discardScale);
+        float targetRotZ = Random.Range(-15f, 15f);
+        Quaternion endRot = Quaternion.Euler(0, 0, targetRotZ);
+        
+        float arcHeight = 100f;
+        Vector3 midPoint = (startPos + endPos) / 2f + Vector3.up * arcHeight;
+        
+        float elapsed = 0f;
+        
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float easedT = 1f - Mathf.Pow(1f - t, 3f);
+            
+            float invT = 1f - easedT;
+            Vector3 pos = invT * invT * startPos + 2f * invT * easedT * midPoint + easedT * easedT * endPos;
+            
+            card.transform.position = pos;
+            card.transform.localScale = Vector3.Lerp(startScale, endScale, easedT);
+            card.transform.localRotation = Quaternion.Slerp(startRot, endRot, easedT);
+            
+            yield return null;
+        }
+        
+        card.transform.SetParent(pile);
+        card.transform.localPosition = Vector3.zero;
+        card.transform.localScale = endScale;
+        card.transform.localRotation = endRot;
+        card.SwitchToDeckMode(faceDown);
+    }
+    
+    /// <summary>
+    /// Animated version of CleanupRound - moves cards to discard with animation
+    /// </summary>
+    public IEnumerator AnimatedCleanupRound()
+    {
+        List<CardUI> playedCards = new List<CardUI>();
+        foreach (Transform child in battleZone)
+        {
+            CardUI card = child.GetComponent<CardUI>();
+            if (card != null) playedCards.Add(card);
+        }
+
+        // Animate cards to discard pile with stagger
+        foreach (CardUI card in playedCards)
+        {
+            StartCoroutine(AnimatedMoveToPile(card, discardPile, true, 0.4f));
+            yield return new WaitForSeconds(0.15f);
+        }
+        
+        // Wait for animations to complete
+        if (playedCards.Count > 0)
+        {
+            yield return new WaitForSeconds(0.25f);
+        }
+
+        // Handle deck reset (no animation needed for this part)
+        if (deckPileArea.childCount == 0)
+        {
+            List<CardUI> discarded = new List<CardUI>();
+            foreach (Transform child in discardPile)
+            {
+                CardUI c = child.GetComponent<CardUI>();
+                if (c != null) discarded.Add(c);
+            }
+            ShuffleList(discarded);
+            foreach (CardUI c in discarded)
+            {
+                c.transform.SetParent(handArea);
+                c.ResetToHandMode();
+                c.SwitchToDeckMode(true);
+                
+                CardDisplay display = c.GetComponent<CardDisplay>();
+                if (display != null) display.ResetStats();
+            }
+        }
+        else
+        {
+            List<CardUI> unused = new List<CardUI>();
+            foreach (Transform child in deckPileArea)
+            {
+                CardUI c = child.GetComponent<CardUI>();
+                if (c != null) unused.Add(c);
+            }
+            foreach (CardUI c in unused)
+            {
+                c.transform.SetParent(handArea);
+                
+                CardDisplay display = c.GetComponent<CardDisplay>();
+                if (display != null) display.ResetStats();
+            }
+        }
     }
 
     void ShuffleList(List<CardUI> list)

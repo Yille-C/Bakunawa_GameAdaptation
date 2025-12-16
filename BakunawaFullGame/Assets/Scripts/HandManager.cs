@@ -145,6 +145,10 @@ public class HandManager : MonoBehaviour
     public bool alayBuffActive = false;
     public bool alayDebuffActive = false;
     public bool agongPlayedThisRound = false;
+    
+    // EXHAUSTION SYSTEM
+    // Cards that were played when winning by forfeit - cannot be used for 1 round
+    private List<CardUI> exhaustedCards = new List<CardUI>();
 
     private Image clashDimmer;
 
@@ -1100,12 +1104,27 @@ public class HandManager : MonoBehaviour
 
         yield return new WaitForSeconds(1.0f);
 
+        // Collect all player cards from battle zone
         List<CardUI> playedCards = new List<CardUI>();
-        foreach (Transform child in battleZone) { CardUI card = child.GetComponent<CardUI>(); if (card != null) playedCards.Add(card); }
-        foreach (CardUI card in playedCards) MoveToPile(card, discardPileArea, true);
-        if (BakunawaAI.Instance != null) BakunawaAI.Instance.CleanupRound();
+        foreach (Transform child in battleZone) 
+        { 
+            CardUI card = child.GetComponent<CardUI>(); 
+            if (card != null) playedCards.Add(card); 
+        }
+        
+        // Animate player cards moving to discard pile
+        if (playedCards.Count > 0)
+        {
+            yield return StartCoroutine(AnimatedMoveCardsToPiles(playedCards, discardPileArea, true, 0.15f));
+        }
+        
+        // Cleanup Bakunawa's round (has its own animation)
+        if (BakunawaAI.Instance != null) 
+        {
+            yield return StartCoroutine(BakunawaAI.Instance.AnimatedCleanupRound());
+        }
 
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(0.5f);
         StartNextRound();
     }
 
@@ -1119,6 +1138,9 @@ public class HandManager : MonoBehaviour
         alayBuffActive = false;
         alayDebuffActive = false;
         agongPlayedThisRound = false;
+        
+        // Clear exhaustion from previously exhausted cards
+        ClearExhaustedCards();
 
         // Clear turn indicators during planning phase
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.ClearTurnIndicators();
@@ -1341,6 +1363,24 @@ public class HandManager : MonoBehaviour
 
     IEnumerator CombatBannerSequence()
     {
+        // Check for forfeit - if either side has no locked cards (ran out)
+        bool playerHasCards = tribeLockedPanel.childCount > 0 || deckPileArea.childCount > 0;
+        bool bakunawaHasCards = BakunawaAI.Instance != null && 
+            (BakunawaAI.Instance.HasLockedCards() || BakunawaAI.Instance.deckPileArea.childCount > 0);
+        
+        // If Bakunawa has no cards at all, player wins by forfeit
+        if (!bakunawaHasCards && playerHasCards)
+        {
+            yield return StartCoroutine(HandleForfeitRound(true)); // Player wins
+            yield break;
+        }
+        // If Player has no cards at all, Bakunawa wins by forfeit
+        else if (!playerHasCards && bakunawaHasCards)
+        {
+            yield return StartCoroutine(HandleForfeitRound(false)); // Bakunawa wins
+            yield break;
+        }
+        
         if (combatBanner != null)
         {
             combatBanner.SetActive(true);
@@ -1701,6 +1741,74 @@ public class HandManager : MonoBehaviour
     // moved logic to end of file to override
 
     void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
+    
+    /// <summary>
+    /// Animated version of MoveToPile - smoothly moves card to the pile with a curved arc
+    /// </summary>
+    IEnumerator AnimatedMoveToPile(CardUI card, Transform pile, bool faceDown, float duration = 0.4f)
+    {
+        if (card == null) yield break;
+        
+        Vector3 startPos = card.transform.position;
+        Vector3 startScale = card.transform.localScale;
+        Quaternion startRot = card.transform.localRotation;
+        
+        // Calculate end position (center of the pile)
+        Vector3 endPos = pile.position;
+        Vector3 endScale = new Vector3(discardScale, discardScale, discardScale);
+        float targetRotZ = Random.Range(-15f, 15f);
+        Quaternion endRot = Quaternion.Euler(0, 0, targetRotZ);
+        
+        // Control point for curved arc (lift up first, then down)
+        float arcHeight = 100f;
+        Vector3 midPoint = (startPos + endPos) / 2f + Vector3.up * arcHeight;
+        
+        float elapsed = 0f;
+        
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            
+            // Ease out curve for smooth deceleration
+            float easedT = 1f - Mathf.Pow(1f - t, 3f);
+            
+            // Bezier curve for arc motion
+            float invT = 1f - easedT;
+            Vector3 pos = invT * invT * startPos + 2f * invT * easedT * midPoint + easedT * easedT * endPos;
+            
+            card.transform.position = pos;
+            card.transform.localScale = Vector3.Lerp(startScale, endScale, easedT);
+            card.transform.localRotation = Quaternion.Slerp(startRot, endRot, easedT);
+            
+            yield return null;
+        }
+        
+        // Finalize
+        card.transform.SetParent(pile);
+        card.transform.localPosition = Vector3.zero;
+        card.transform.localScale = endScale;
+        card.transform.localRotation = endRot;
+        card.SwitchToDeckMode(faceDown);
+    }
+    
+    /// <summary>
+    /// Moves multiple cards to piles with staggered animation
+    /// </summary>
+    IEnumerator AnimatedMoveCardsToPiles(List<CardUI> cards, Transform pile, bool faceDown, float staggerDelay = 0.15f)
+    {
+        foreach (CardUI card in cards)
+        {
+            if (card != null)
+            {
+                StartCoroutine(AnimatedMoveToPile(card, pile, faceDown, 0.4f));
+                yield return new WaitForSeconds(staggerDelay);
+            }
+        }
+        
+        // Wait for last animation to complete
+        yield return new WaitForSeconds(0.25f);
+    }
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
     void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
     void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
@@ -1724,11 +1832,15 @@ public class HandManager : MonoBehaviour
             cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
             cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
             // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
+            
+            // Update pagination to fill the gap with cards from next pages
+            UpdateHandPagination();
         }
         else 
         {
             selectedCardsUI.Remove(cardUI);
             ReturnCardToHand(cardUI);
+            // Note: ReturnCardToHand already calls UpdateHandPagination
         }
         
         UpdateEnergyUI(); 
@@ -1840,6 +1952,13 @@ public class HandManager : MonoBehaviour
         card.transform.SetParent(handArea); 
         card.transform.localScale = Vector3.one; 
         card.ResetToHandMode(); 
+        
+        // Reset any buffs/debuffs when card returns to hand
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null)
+        {
+            display.ResetStats();
+        }
         
         // Ensure the card is counted in pagination
         UpdateHandPagination(); 
@@ -2120,4 +2239,188 @@ public class HandManager : MonoBehaviour
         // Clamp: Never expand beyond maxSpacing, but allow infinite overlap (negative spacing)
         hlg.spacing = Mathf.Min(maxSpacing, dynamicSpacing);
     }
+    
+    #region Exhaustion System
+    
+    /// <summary>
+    /// Clears exhaustion status from all exhausted cards at the start of a new round
+    /// </summary>
+    void ClearExhaustedCards()
+    {
+        foreach (CardUI card in exhaustedCards)
+        {
+            if (card != null)
+            {
+                card.SetExhausted(false);
+            }
+        }
+        exhaustedCards.Clear();
+        Debug.Log("[HandManager] Cleared all exhausted cards");
+    }
+    
+    /// <summary>
+    /// Marks cards as exhausted - they cannot be used this round
+    /// </summary>
+    void ExhaustCards(List<CardUI> cards)
+    {
+        foreach (CardUI card in cards)
+        {
+            if (card != null)
+            {
+                card.SetExhausted(true);
+                exhaustedCards.Add(card);
+            }
+        }
+        Debug.Log($"[HandManager] Exhausted {cards.Count} cards");
+    }
+    
+    /// <summary>
+    /// Checks if player has run out of usable cards (empty deck + hand, or only exhausted cards)
+    /// </summary>
+    public bool IsPlayerOutOfCards()
+    {
+        // Count available cards in hand
+        int availableInHand = 0;
+        foreach (Transform child in handArea)
+        {
+            CardUI card = child.GetComponent<CardUI>();
+            if (card != null && !card.IsExhausted)
+            {
+                availableInHand++;
+            }
+        }
+        
+        // Count cards in deck pile
+        int inDeck = deckPileArea.childCount;
+        
+        return (availableInHand == 0 && inDeck == 0);
+    }
+    
+    /// <summary>
+    /// Checks if Bakunawa has run out of cards
+    /// </summary>
+    public bool IsBakunawaOutOfCards()
+    {
+        if (BakunawaAI.Instance == null) return false;
+        
+        int inHand = BakunawaAI.Instance.handArea.childCount;
+        int inDeck = BakunawaAI.Instance.deckPileArea.childCount;
+        
+        return (inHand == 0 && inDeck == 0);
+    }
+    
+    /// <summary>
+    /// Handles forfeit scenario when one side runs out of cards
+    /// Winner's locked cards become exhausted for next round
+    /// </summary>
+    public IEnumerator HandleForfeitRound(bool playerWins)
+    {
+        Debug.Log($"[HandManager] Forfeit! {(playerWins ? "Player" : "Bakunawa")} wins by default");
+        
+        // Show forfeit message
+        if (planningBanner != null && planningBannerText != null)
+        {
+            planningBanner.SetActive(true);
+            planningBannerText.text = playerWins ? "BAKUNAWA RAN OUT OF CARDS!" : "YOU RAN OUT OF CARDS!";
+            
+            CanvasGroup group = planningBanner.GetComponent<CanvasGroup>();
+            if (group != null) 
+            { 
+                group.alpha = 0; 
+                while (group.alpha < 1) { group.alpha += Time.deltaTime * 3f; yield return null; } 
+            }
+            
+            yield return new WaitForSeconds(2f);
+            
+            if (group != null) 
+            { 
+                while (group.alpha > 0) { group.alpha -= Time.deltaTime * 3f; yield return null; } 
+            }
+            planningBanner.SetActive(false);
+        }
+        
+        if (playerWins)
+        {
+            // Player wins - their locked cards become exhausted
+            List<CardUI> cardsToExhaust = new List<CardUI>();
+            foreach (Transform child in tribeLockedPanel)
+            {
+                CardUI card = child.GetComponent<CardUI>();
+                if (card != null) cardsToExhaust.Add(card);
+            }
+            
+            // Move locked cards back to hand as exhausted
+            foreach (CardUI card in cardsToExhaust)
+            {
+                card.transform.SetParent(handArea);
+                card.SetLockedState(false);
+                card.ResetToHandMode();
+            }
+            
+            // Mark them as exhausted
+            ExhaustCards(cardsToExhaust);
+            
+            // Award point to player
+            if (ScoreManager.Instance != null)
+            {
+                ScoreManager.Instance.UpdateTowerScore(-1);
+            }
+            
+            // Clean up Bakunawa (they have no cards, but just in case)
+            if (BakunawaAI.Instance != null)
+            {
+                BakunawaAI.Instance.CleanupRound();
+            }
+        }
+        else
+        {
+            // Bakunawa wins - move player's locked cards (if any) to discard
+            List<CardUI> playerLockedCards = new List<CardUI>();
+            foreach (Transform child in tribeLockedPanel)
+            {
+                CardUI card = child.GetComponent<CardUI>();
+                if (card != null) playerLockedCards.Add(card);
+            }
+            foreach (CardUI card in playerLockedCards)
+            {
+                MoveToPile(card, discardPileArea, true);
+            }
+            
+            // Bakunawa's locked cards should be exhausted (they won by forfeit)
+            // Move them back to Bakunawa's hand as exhausted
+            if (BakunawaAI.Instance != null)
+            {
+                List<CardUI> bakunawaLockedCards = new List<CardUI>();
+                foreach (Transform child in BakunawaAI.Instance.lockedArea)
+                {
+                    CardUI card = child.GetComponent<CardUI>();
+                    if (card != null) bakunawaLockedCards.Add(card);
+                }
+                
+                foreach (CardUI card in bakunawaLockedCards)
+                {
+                    card.transform.SetParent(BakunawaAI.Instance.handArea);
+                    card.SetLockedState(false);
+                    card.SwitchToDeckMode(true); // Show as face-down
+                    card.SetExhausted(true); // Mark exhausted
+                }
+                
+                // Also clear Bakunawa's internal locked cards list
+                BakunawaAI.Instance.ClearLockedCards();
+            }
+            
+            // Award point to Bakunawa
+            if (ScoreManager.Instance != null)
+            {
+                ScoreManager.Instance.UpdateTowerScore(1);
+            }
+        }
+        
+        yield return new WaitForSeconds(1f);
+        
+        // Proceed to next round
+        StartNextRound();
+    }
+    
+    #endregion
 }
