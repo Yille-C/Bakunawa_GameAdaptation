@@ -51,6 +51,28 @@ public class ScoreManager : MonoBehaviour
         playerDebuffValue = 0;
         lastEnemyDebuff = 0;
         lastPlayerDebuff = 0;
+        
+        // Add glow effects to score displays
+        SetupScoreGlow();
+    }
+    
+    void SetupScoreGlow()
+    {
+        // Player/Tribe score - Golden/Orange glow
+        if (playerScoreText != null)
+        {
+            ScoreGlowEffect glowEffect = playerScoreText.GetComponent<ScoreGlowEffect>();
+            if (glowEffect == null) glowEffect = playerScoreText.gameObject.AddComponent<ScoreGlowEffect>();
+            glowEffect.SetGlowColor(new Color(1f, 0.6f, 0.2f)); // Orange
+        }
+        
+        // Bakunawa score - Blue glow
+        if (bakunawaScoreText != null)
+        {
+            ScoreGlowEffect glowEffect = bakunawaScoreText.GetComponent<ScoreGlowEffect>();
+            if (glowEffect == null) glowEffect = bakunawaScoreText.gameObject.AddComponent<ScoreGlowEffect>();
+            glowEffect.SetGlowColor(new Color(0.3f, 0.6f, 1f)); // Blue
+        }
     }
 
     void Update()
