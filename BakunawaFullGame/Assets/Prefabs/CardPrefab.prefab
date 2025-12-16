@@ -831,11 +831,16 @@ MonoBehaviour:
   costText: {fileID: 8846383303051907417}
   attackText: {fileID: 6462706511652342530}
   selectionBorder: {fileID: 4541180945689914086}
+  glowEffect: {fileID: 0}
   cardBackObject: {fileID: 6169300986534241884}
   lockedArtObject: {fileID: 1020274286349391496}
   lockedCostObject: {fileID: 8027670441604492704}
   lockedAttackObject: {fileID: 9136386244761063236}
   isEnemy: 0
+  hoverScale: 1.1
+  selectedScale: 1.1
+  selectedYOffset: 20
+  animSpeed: 15
 --- !u!114 &-7152160072729639188
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -4,28 +4,13 @@ using UnityEngine.UI;
 
 public class MainMenuManager : MonoBehaviour
 {
-    public static MainMenuManager Instance;
-
     [Header("Scene Config")]
+    [Tooltip("Name of the scene to load when Play is clicked")]
     [SerializeField] private string gameSceneName = "GameScene";
 
-    [Header("Main Panels")]
+    [Header("Panels")]
     [SerializeField] private GameObject settingsPanel;
     [SerializeField] private GameObject howToPlayPanel;
-
-    [Header("Multiplayer UI")]
-    [SerializeField] private GameObject multiplayerPanel;
-    [SerializeField] private InputField ipInputField;
-    [SerializeField] private Text statusText;
-    [SerializeField] private GameObject hostJoinButtons;
-    [SerializeField] private GameObject roleSelectionGroup;
-    [SerializeField] private Button btnBack;
-
-    [Header("Role Buttons")]
-    [SerializeField] private Button btnAttacker;
-    [SerializeField] private Button btnTank;
-    [SerializeField] private Button btnSupport;
-    [SerializeField] private Button btnStartGame; // Only visible to host
 
     [Header("Audio Settings")]
     [SerializeField] private AudioSource sfxSource;
@@ -33,57 +18,112 @@ public class MainMenuManager : MonoBehaviour
     [SerializeField] private AudioClip hoverClip;
     [SerializeField] private Slider volumeSlider;
 
-    private void Awake()
+    private void Start()
     {
-        Instance = this;
+        // Initialize Volume from Prefs
+        if (volumeSlider != null)
+        {
+            float savedVol = PlayerPrefs.GetFloat("MasterVolume", 1f);
+            volumeSlider.value = savedVol;
+            AudioListener.volume = savedVol;
+            
+            // Add listener dynamically
+            volumeSlider.onValueChanged.AddListener(SetMasterVolume);
+        }
+        else
+        {
+            // Just load the volume if slider missing
+            AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
+        }
+
+        // Fallback: Find Settings Panel if missing
+        if (settingsPanel == null)
+        {
+            var settingsMenu = Object.FindFirstObjectByType<SettingsMenu>(FindObjectsInactive.Include);
+            if (settingsMenu != null)
+            {
+                settingsPanel = settingsMenu.gameObject;
+                Debug.Log("MainMenuManager found SettingsPanel dynamically.");
+            }
+            else
+            {
+                // Fallback by name
+                settingsPanel = GameObject.Find("SettingsPanel");
+                if (settingsPanel == null) settingsPanel = GameObject.Find("Settings Panel");
+            }
+        }
     }
 
-    // Inside MainMenuManager.cs
-
-
-
-    // --- BUTTON EVENTS ---
+    // --- Button Events ---
 
     public void OnPlayClicked()
     {
         PlayClickSound();
-        // Instantly load the single player game
-        SceneManager.LoadScene(gameSceneName);
+        Debug.Log("Play Clicked");
+        
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.LoadScene(gameSceneName);
+        }
+        else
+        {
+            // Fallback: Queue the game scene and load the Loading Screen scene
+            LoadingScreenManager.SceneToLoadOnStart = gameSceneName;
+            SceneManager.LoadScene("LoadingScreen");
+        }
     }
-
-
-
-
 
     public void OnHowToPlayClicked()
     {
         PlayClickSound();
-        if (howToPlayPanel != null) howToPlayPanel.SetActive(true);
+        Debug.Log("How to play clicked");
+        if (howToPlayPanel != null)
+            howToPlayPanel.SetActive(true);
     }
 
     public void OnSettingsClicked()
     {
         PlayClickSound();
-        if (settingsPanel != null) settingsPanel.SetActive(true);
+        Debug.Log("Settings clicked - Attempting to open panel");
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(true);
+            settingsPanel.transform.SetAsLastSibling(); // Ensure it's on top
+            Debug.Log($"Settings Panel opened: {settingsPanel.name}");
+        }
+        else
+        {
+            Debug.LogError("Settings Panel reference is MISSING in MainMenuManager!");
+        }
     }
 
     public void OnQuitClicked()
     {
         PlayClickSound();
+        Debug.Log("Quit clicked");
         Application.Quit();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
     }
+
+    // --- Panel Control ---
 
     public void CloseSettings()
     {
         PlayClickSound();
-        if (settingsPanel != null) settingsPanel.SetActive(false);
+        if (settingsPanel != null)
+            settingsPanel.SetActive(false);
     }
 
     public void CloseHowToPlay()
     {
         PlayClickSound();
-        if (howToPlayPanel != null) howToPlayPanel.SetActive(false);
+        if (howToPlayPanel != null)
+            howToPlayPanel.SetActive(false);
     }
+
+    // --- Settings Logic ---
 
     public void SetMasterVolume(float value)
     {
@@ -92,8 +132,21 @@ public class MainMenuManager : MonoBehaviour
         PlayerPrefs.Save();
     }
 
+    // --- Audio Helpers ---
+
     private void PlayClickSound()
     {
-        if (sfxSource != null && clickClip != null) sfxSource.PlayOneShot(clickClip);
+        if (sfxSource != null && clickClip != null)
+        {
+            sfxSource.PlayOneShot(clickClip);
+        }
+    }
+
+    public void PlayHoverSound() // To be called via EventTrigger if desired
+    {
+        if (sfxSource != null && hoverClip != null)
+        {
+            sfxSource.PlayOneShot(hoverClip);
+        }
     }
 }
