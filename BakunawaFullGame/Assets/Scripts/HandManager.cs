@@ -48,6 +48,11 @@ public class HandManager : MonoBehaviour
     public Image enemyDiceImg;
     public Button rollButton;
     public List<Sprite> diceSprites;
+    
+    [Header("3D Dice Animation (Optional)")]
+    [Tooltip("If assigned, uses pseudo-3D dice animation instead of simple sprite swap")]
+    public Dice3DAnimator playerDice3D;
+    public Dice3DAnimator enemyDice3D;
 
     [Header("Turn Choice UI")]
     public GameObject turnChoicePanel;
@@ -1231,23 +1236,53 @@ public class HandManager : MonoBehaviour
 
     IEnumerator RollDiceRoutine()
     {
-        float duration = 1.0f;
-        float elapsed = 0f;
+        // Check if we should use 3D dice animation
+        bool use3DDice = (playerDice3D != null && enemyDice3D != null);
+        
         int pRoll = 1;
         int eRoll = 1;
-
-        while (elapsed < duration)
+        
+        if (use3DDice)
         {
-            pRoll = Random.Range(1, 7);
-            eRoll = Random.Range(1, 7);
-
-            if (diceSprites != null && diceSprites.Count >= 6)
+            // Use pseudo-3D dice animation
+            bool playerDone = false;
+            bool enemyDone = false;
+            
+            playerDice3D.Roll((result) => {
+                pRoll = result;
+                playerDone = true;
+            });
+            
+            enemyDice3D.Roll((result) => {
+                eRoll = result;
+                enemyDone = true;
+            });
+            
+            // Wait for both dice to finish rolling
+            while (!playerDone || !enemyDone)
             {
-                playerDiceImg.sprite = diceSprites[pRoll - 1];
-                enemyDiceImg.sprite = diceSprites[eRoll - 1];
+                yield return null;
             }
-            elapsed += 0.1f;
-            yield return new WaitForSeconds(0.1f);
+        }
+        else
+        {
+            // Legacy 2D sprite animation
+            float duration = 1.0f;
+            float elapsed = 0f;
+            
+            while (elapsed < duration)
+            {
+                pRoll = Random.Range(1, 7);
+                eRoll = Random.Range(1, 7);
+
+                if (diceSprites != null && diceSprites.Count >= 6)
+                {
+                    playerDiceImg.sprite = diceSprites[pRoll - 1];
+                    enemyDiceImg.sprite = diceSprites[eRoll - 1];
+                }
+                elapsed += 0.1f;
+                yield return new WaitForSeconds(0.1f);
+            }
         }
 
         Debug.Log($"Dice Roll! Player: {pRoll}, Enemy: {eRoll}");
@@ -1269,6 +1304,13 @@ public class HandManager : MonoBehaviour
         }
         else
         {
+            // Tie - roll again
+            if (use3DDice)
+            {
+                // Reset 3D dice for another roll
+                playerDice3D.ResetDice();
+                enemyDice3D.ResetDice();
+            }
             rollButton.interactable = true;
         }
     }

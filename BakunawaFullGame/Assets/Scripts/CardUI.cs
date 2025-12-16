@@ -34,6 +34,10 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     [Header("Settings")]
     public bool isEnemy = false;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip flipCardSound;
+    private AudioSource audioSource;
+
     [Header("Animation Settings")]
     [SerializeField] private float hoverScale = 1.1f;
     [SerializeField] private float selectedScale = 1.1f;
@@ -110,6 +114,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             glowOverlay = GetComponent<CardGlowOverlay>();
             if (glowOverlay == null) glowOverlay = gameObject.AddComponent<CardGlowOverlay>();
         }
+
+        // Pre-initialize AudioSource for instant sound playback
+        InitializeAudioSource();
 
         if (nameText != null) nameText.text = data.cardName;
         if (costText != null) costText.text = data.energyCost.ToString();
@@ -292,6 +299,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Switch to normal/full card state (from minimized/locked state)
         SetLockedState(false);
 
+        // Play flip card sound
+        PlayFlipSound();
+
         EnableDragShadow(true);
 
         // Initialize drag animation state
@@ -303,6 +313,32 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Start lift animation (quick flip effect)
         if (liftAnimationCoroutine != null) StopCoroutine(liftAnimationCoroutine);
         liftAnimationCoroutine = StartCoroutine(DragLiftAnimation());
+    }
+
+    /// <summary>
+    /// Pre-initializes the AudioSource for instant sound playback
+    /// </summary>
+    private void InitializeAudioSource()
+    {
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+                audioSource.spatialBlend = 0f; // 2D sound
+            }
+        }
+    }
+
+    /// <summary>
+    /// Plays the flip card sound effect
+    /// </summary>
+    private void PlayFlipSound()
+    {
+        if (flipCardSound == null || audioSource == null) return;
+        audioSource.PlayOneShot(flipCardSound);
     }
 
     private GameObject dragShadowObject;

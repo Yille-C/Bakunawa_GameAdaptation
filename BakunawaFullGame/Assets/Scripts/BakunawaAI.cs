@@ -24,6 +24,10 @@ public class BakunawaAI : MonoBehaviour
     public float lockedScale = 0.6f; // Scale for cards in locked area (match player's scale)
     public float discardScale = 0.8f;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip flipCardSound;
+    private AudioSource audioSource;
+
     private List<CardUI> myHand = new List<CardUI>();
     private List<CardUI> myLockedCards = new List<CardUI>();
 
@@ -35,7 +39,25 @@ public class BakunawaAI : MonoBehaviour
     void Start()
     {
         SetupBattleZone();
+        InitializeAudioSource();
         Invoke("SpawnHand", 0.5f);
+    }
+
+    /// <summary>
+    /// Pre-initializes the AudioSource for instant sound playback
+    /// </summary>
+    private void InitializeAudioSource()
+    {
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+                audioSource.spatialBlend = 0f; // 2D sound
+            }
+        }
     }
 
     void SetupBattleZone()
@@ -270,6 +292,9 @@ public class BakunawaAI : MonoBehaviour
     {
         if (card == null) yield break;
 
+        // Play flip sound at the start of the animation
+        PlayFlipSound();
+
         float elapsed = 0f;
         float halfDuration = duration * 0.5f;
 
@@ -334,6 +359,15 @@ public class BakunawaAI : MonoBehaviour
         card.transform.rotation = Quaternion.Euler(baseEuler.x, 0, baseEuler.z);
         card.transform.localScale = originalScale;
         card.SwitchToDeckMode(false);
+    }
+
+    /// <summary>
+    /// Plays the flip card sound effect
+    /// </summary>
+    private void PlayFlipSound()
+    {
+        if (flipCardSound == null || audioSource == null) return;
+        audioSource.PlayOneShot(flipCardSound);
     }
 
     public void CleanupRound()

@@ -840,10 +840,20 @@ MonoBehaviour:
   lockedCostObject: {fileID: 8027670441604492704}
   lockedAttackObject: {fileID: 9136386244761063236}
   isEnemy: 0
+  flipCardSound: {fileID: 8300000, guid: d8daff297ce56cc479413471c6cc9371, type: 3}
   hoverScale: 1.1
   selectedScale: 1.1
   selectedYOffset: 20
   animSpeed: 15
+  dragLiftScale: 1.15
+  dragMaxTiltX: 15
+  dragMaxTiltY: 20
+  dragTiltSpeed: 8
+  dragFlipDuration: 0.15
+  shadowBaseOffset: 20
+  shadowTiltMultiplier: 1.5
+  shadowBaseAlpha: 0.35
+  shadowScaleMultiplier: 1.08
 --- !u!114 &-7152160072729639188
 MonoBehaviour:
   m_ObjectHideFlags: 0

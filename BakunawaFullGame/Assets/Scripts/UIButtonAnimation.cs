@@ -90,5 +90,26 @@ public class UIButtonAnimation : MonoBehaviour, IPointerEnterHandler, IPointerEx
         {
             audioSource.PlayOneShot(clip);
         }
+        else if (clip == null)
+        {
+            // If no local clip, try to use global UIAudioManager
+            // This is handled by the button's onClick event via UIAudioManager
+            // So we don't need to do anything here for click sounds
+        }
+    }
+    
+    /// <summary>
+    /// Plays hover sound using global manager if available
+    /// </summary>
+    private void PlayHoverSoundGlobal()
+    {
+        if (hoverSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(hoverSound);
+        }
+        else if (UIAudioManager.Instance != null)
+        {
+            UIAudioManager.Instance.PlayHoverSound();
+        }
     }
 }
