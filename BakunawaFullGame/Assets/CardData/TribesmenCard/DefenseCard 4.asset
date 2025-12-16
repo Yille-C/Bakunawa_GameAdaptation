@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 1897068161, guid: 74a0c5991949eaa43a309128dd1b71ad, type: 3}
   description: Reduce Enemy Total Atk by 2.
   effectID: def_kalasag
+  lockedArt: {fileID: 1861795194, guid: 3382f00e080127a49964eab710761ba5, type: 3}

@@ -113,8 +113,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0.000045776, y: -120.63962}
-  m_SizeDelta: {x: 255.47, y: 168.3608}
+  m_AnchoredPosition: {x: 0.000045776, y: -71.290924}
+  m_SizeDelta: {x: 255.47, y: 267.0582}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &726879570760553602
 CanvasRenderer:
@@ -519,9 +519,12 @@ MonoBehaviour:
   costText: {fileID: 8846383303051907417}
   attackText: {fileID: 6462706511652342530}
   selectionBorder: {fileID: 4541180945689914086}
+  glowOverlay: {fileID: 0}
   glowEffect: {fileID: 0}
   cardBackObject: {fileID: 6169300986534241884}
   lockedArtObject: {fileID: 1020274286349391496}
+  lockedArtImage: {fileID: 1345538136882289790}
+  brokenVisuals: {fileID: 0}
   lockedCostObject: {fileID: 0}
   lockedAttackObject: {fileID: 0}
   isEnemy: 1

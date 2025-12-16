@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 413262645, guid: 1ff7dfe380d72cc4395b4a3f5d875f22, type: 3}
   description: +2 Atk this round.
   effectID: sup_elder
+  lockedArt: {fileID: -941063944, guid: 7b61dccfe8dc18a40bb8137fbf5de9b1, type: 3}

@@ -21,3 +21,4 @@ MonoBehaviour:
   description: Reduce Enemy Total Atk by 3. When The tribesmen lost the round, retrieve
     the top card form discard pile.
   effectID: def_agong
+  lockedArt: {fileID: -1444587994, guid: 687bbe1a3fbcb0d4e92f49511a3a5b7a, type: 3}

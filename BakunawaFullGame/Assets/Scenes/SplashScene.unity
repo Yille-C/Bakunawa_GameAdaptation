@@ -630,7 +630,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 668fead0382403449ad9bb46276dfa07, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SplashScreenManager
-  nextSceneName: GameScene
+  nextSceneName: Main Menu
   displayDuration: 2
   fadeInDuration: 1
   fadeOutDuration: 1

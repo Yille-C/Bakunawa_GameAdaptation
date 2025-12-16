@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -382894149, guid: c3bd8ef482bf98f4cb31b315187f74b3, type: 3}
   description: +2 Attack if played as your first card.
   effectID: atk_datu
+  lockedArt: {fileID: -618293606, guid: 1c95ac8ec56879e4fb2db832bd3e887f, type: 3}

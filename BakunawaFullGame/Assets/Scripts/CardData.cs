@@ -29,4 +29,7 @@ public class CardData : ScriptableObject
 
     [Header("Logic")]
     public string effectID;     // KEY: e.g., "atk_bayanihan", "def_palayok"
+
+    [Header("Visuals")]
+    public Sprite lockedArt;
 }

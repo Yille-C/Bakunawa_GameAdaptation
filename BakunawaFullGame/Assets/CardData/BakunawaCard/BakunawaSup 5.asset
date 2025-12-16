@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 2071323990, guid: b8ebe3f14ef66e046a5c334ebc964f48, type: 3}
   description: "If \u22645 cards left in deck, opponent discards 1."
   effectID: sup_draconic
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

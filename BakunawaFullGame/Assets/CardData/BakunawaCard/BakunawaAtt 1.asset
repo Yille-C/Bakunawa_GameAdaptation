@@ -21,3 +21,4 @@ MonoBehaviour:
   description: If this card wins the round as a lone card, move Favor marker 1 additional
     space.
   effectID: atk_lunar
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

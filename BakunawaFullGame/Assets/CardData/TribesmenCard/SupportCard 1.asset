@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 1041745036, guid: b55068cd8359a944c87ac03b206cb717, type: 3}
   description: +2 Atk for every card played this round
   effectID: sup_blessing
+  lockedArt: {fileID: -611995310, guid: bfbff1b7af7c2cd4795e6fd79660285c, type: 3}

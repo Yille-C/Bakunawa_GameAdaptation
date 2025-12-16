@@ -39,17 +39,7 @@ public class CardEffectManager : MonoBehaviour
         }
 
         // Check Global Player Buffs (Alay) - Only apply if this is the PLAYER's team
-        if (!cardsPlayed[0].isEnemy)
-        {
-            if (HandManager.Instance != null && HandManager.Instance.alayBuffActive)
-            {
-                foreach (CardUI c in cardsPlayed) c.GetComponent<CardDisplay>().ModifyAttack(4);
-            }
-            if (HandManager.Instance != null && HandManager.Instance.alayDebuffActive)
-            {
-                enemyDebuff += 6;
-            }
-        }
+
 
         // 2. CALCULATION LOOP
         for (int i = 0; i < cardsPlayed.Count; i++)
