@@ -1740,7 +1740,18 @@ public class HandManager : MonoBehaviour
 
     // moved logic to end of file to override
 
-    void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
+    void MoveToPile(CardUI card, Transform pile, bool faceDown) 
+    { 
+        // Stop any particle effects on this card
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null) display.ResetStats();
+        
+        card.transform.SetParent(pile); 
+        card.transform.localPosition = Vector3.zero; 
+        card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); 
+        card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); 
+        card.SwitchToDeckMode(faceDown); 
+    }
     
     /// <summary>
     /// Animated version of MoveToPile - smoothly moves card to the pile with a curved arc
@@ -1748,6 +1759,10 @@ public class HandManager : MonoBehaviour
     IEnumerator AnimatedMoveToPile(CardUI card, Transform pile, bool faceDown, float duration = 0.4f)
     {
         if (card == null) yield break;
+        
+        // Stop any particle effects on this card immediately
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null) display.ResetStats();
         
         Vector3 startPos = card.transform.position;
         Vector3 startScale = card.transform.localScale;
@@ -2028,11 +2043,14 @@ public class HandManager : MonoBehaviour
         for(int i=0; i<sparkCount; i++)
         {
             // Bright glowing colors
+            // Bright glowing colors (HDR Boosted)
             float rVal = Random.value;
+            float hdrMult = 8.0f; // High intensity for bloom
             Color sparkColor;
-            if (rVal > 0.6f) sparkColor = new Color(1f, 1f, 0.7f); // Bright white-yellow
-            else if (rVal > 0.3f) sparkColor = new Color(1f, 0.85f, 0.2f); // Bright gold
-            else sparkColor = new Color(1f, 0.5f, 0.1f); // Hot orange
+            
+            if (rVal > 0.6f) sparkColor = new Color(1f * hdrMult, 1f * hdrMult, 0.8f * hdrMult); // Bright white-yellow
+            else if (rVal > 0.3f) sparkColor = new Color(1f * hdrMult, 0.9f * hdrMult, 0.2f * hdrMult); // Bright gold
+            else sparkColor = new Color(1f * hdrMult, 0.5f * hdrMult, 0.1f * hdrMult); // Hot orange
             
             // Create GLOW HALO behind the spark
             GameObject halo = new GameObject("Halo");
@@ -2047,14 +2065,14 @@ public class HandManager : MonoBehaviour
             {
                 Material haloMat = new Material(hdrGlowMat);
                 haloMat.SetColor("_Color", sparkColor);
-                haloMat.SetFloat("_GlowIntensity", 3f); // Softer glow for halo
+                haloMat.SetFloat("_GlowIntensity", 5f); // Softer glow for halo but brighter
                 haloImg.material = haloMat;
-                haloImg.color = new Color(1f, 1f, 1f, 0.6f);
+                haloImg.color = new Color(1f, 1f, 1f, 0.8f);
             }
             else
             {
                 haloImg.sprite = Sprite.Create(fallbackGlowTex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
-                haloImg.color = new Color(sparkColor.r, sparkColor.g, sparkColor.b, 0.4f);
+                haloImg.color = new Color(sparkColor.r, sparkColor.g, sparkColor.b, 0.6f);
             }
             
             // Create the SPARK on top
@@ -2070,7 +2088,8 @@ public class HandManager : MonoBehaviour
             {
                 Material sparkMat = new Material(hdrGlowMat);
                 sparkMat.SetColor("_Color", sparkColor);
-                sparkMat.SetFloat("_GlowIntensity", 5f); // Bright spark core
+                sparkMat.SetFloat("_GlowIntensity", 10f); // Massive intensity for core
+
                 sparkMat.SetFloat("_GlowFalloff", 2f); // Sharper falloff
                 img.material = sparkMat;
                 img.color = Color.white;

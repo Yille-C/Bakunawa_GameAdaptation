@@ -434,6 +434,11 @@ public class BakunawaAI : MonoBehaviour
     void MoveToPile(CardUI card, Transform pile, bool faceDown)
     {
         if (card == null) return;
+        
+        // Stop any particle effects on this card
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null) display.ResetStats();
+        
         card.transform.SetParent(pile);
         card.transform.localPosition = Vector3.zero;
         card.transform.localScale = new Vector3(discardScale, discardScale, discardScale);
@@ -447,6 +452,10 @@ public class BakunawaAI : MonoBehaviour
     IEnumerator AnimatedMoveToPile(CardUI card, Transform pile, bool faceDown, float duration = 0.4f)
     {
         if (card == null) yield break;
+        
+        // Stop any particle effects on this card immediately
+        CardDisplay display = card.GetComponent<CardDisplay>();
+        if (display != null) display.ResetStats();
         
         Vector3 startPos = card.transform.position;
         Vector3 startScale = card.transform.localScale;
