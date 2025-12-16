@@ -162,6 +162,19 @@ public class LoadingScreenManager : MonoBehaviour
         }
     }
 
+    // --- Static queuing for scene transitions ---
+    public static string SceneToLoadOnStart;
+
+    private void Start()
+    {
+        if (!string.IsNullOrEmpty(SceneToLoadOnStart))
+        {
+            string target = SceneToLoadOnStart;
+            SceneToLoadOnStart = null;
+            LoadScene(target);
+        }
+    }
+
     private void Update()
     {
         // Only animate if loading screen is visible

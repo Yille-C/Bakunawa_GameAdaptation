@@ -67,7 +67,9 @@ public class MainMenuManager : MonoBehaviour
         }
         else
         {
-            SceneManager.LoadScene(gameSceneName);
+            // Fallback: Queue the game scene and load the Loading Screen scene
+            LoadingScreenManager.SceneToLoadOnStart = gameSceneName;
+            SceneManager.LoadScene("LoadingScreen");
         }
     }
 

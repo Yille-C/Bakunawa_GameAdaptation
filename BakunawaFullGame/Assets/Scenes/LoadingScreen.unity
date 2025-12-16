@@ -259,7 +259,7 @@ GameObject:
   - component: {fileID: 479497014}
   - component: {fileID: 479497013}
   m_Layer: 5
-  m_Name: Canvas
+  m_Name: LoadingPanel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -526,7 +526,7 @@ GameObject:
   - component: {fileID: 826335586}
   - component: {fileID: 826335587}
   m_Layer: 5
-  m_Name: Loading Bar
+  m_Name: ProgressBar
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1163,6 +1163,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1643769184}
   - component: {fileID: 1643769183}
+  - component: {fileID: 1643769185}
   m_Layer: 0
   m_Name: LoadingScreenmanager
   m_TagString: Untagged
@@ -1226,6 +1227,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1643769185
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1643769182}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f9c6a412bb41af45ace056f95e8b213, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoadingSceneController
+  progressBar: {fileID: 1900226757}
+  progressSlider: {fileID: 826335587}
+  loadingText: {fileID: 0}
+  tipText: {fileID: 0}
+  minimumDisplayTime: 2
+  fadeOutDuration: 0.5
+  useSmoothProgress: 1
+  smoothFillSpeed: 5
+  randomTips:
+  - 'Tip: Long press on cards to view their details!'
+  - Did you know? The Bakunawa is a dragon from Filipino mythology that swallows
+    the moon.
+  - 'Strategy: Save high-attack cards for crucial rounds!'
+  - 'Tip: Watch your energy! Plan your card plays wisely.'
+  - 'Lore: The tribes gathered around the Tower to protect the moon from the Bakunawa.'
+  progressBarName: ProgressBar
+  loadingTextName: LoadingText
+  tipTextName: TipText
 --- !u!1 &1708601715
 GameObject:
   m_ObjectHideFlags: 0
@@ -1238,7 +1269,7 @@ GameObject:
   - component: {fileID: 1708601718}
   - component: {fileID: 1708601717}
   m_Layer: 5
-  m_Name: Tip
+  m_Name: TipText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1643,7 +1674,7 @@ GameObject:
   - component: {fileID: 2090677883}
   - component: {fileID: 2090677882}
   m_Layer: 5
-  m_Name: Loading... 00%
+  m_Name: LoadingText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
