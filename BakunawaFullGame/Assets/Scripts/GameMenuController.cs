@@ -10,13 +10,16 @@ using UnityEngine.InputSystem;
 public class GameMenuController : MonoBehaviour
 {
     [Header("UI References")]
-    [Tooltip("The main container for the pause menu UI")]
+    [Tooltip("The main container for the pause menu UI (stays active when settings shown)")]
     public GameObject menuPanel;
+    
+    [Tooltip("The container for menu buttons (Resume, Settings, etc.) - hidden when settings shown")]
+    public GameObject menuContentPanel;
     
     [Tooltip("The button in the HUD that opens this menu")]
     public Button openMenuButton;
     
-    [Tooltip("The settings panel (should contain SettingsMenu script)")]
+    [Tooltip("The settings panel (can be a child of menuPanel)")]
     public GameObject settingsPanel;
 
     [Header("Menu Buttons")]
@@ -24,6 +27,10 @@ public class GameMenuController : MonoBehaviour
     public Button settingsButton;
     public Button mainMenuButton;
     public Button quitButton;
+    
+    [Header("Settings Panel")]
+    [Tooltip("The Back button inside the Settings Panel")]
+    public Button settingsBackButton;
     
     [Header("Scene Management")]
     [Tooltip("Name of the Main Menu scene to load on Quit")]
@@ -52,6 +59,10 @@ public class GameMenuController : MonoBehaviour
 
         if (quitButton != null)
             quitButton.onClick.AddListener(OnQuitClicked);
+        
+        // Settings Panel Back Button
+        if (settingsBackButton != null)
+            settingsBackButton.onClick.AddListener(CloseSettings);
             
         // Optional: Ensure buttons have animations
         EnsureButtonAnimations();
@@ -84,6 +95,10 @@ public class GameMenuController : MonoBehaviour
         
         if (menuPanel != null) 
             menuPanel.SetActive(isPaused);
+        
+        // Show menu content, hide settings when toggling
+        if (menuContentPanel != null)
+            menuContentPanel.SetActive(isPaused);
             
         // Close settings if we are just opening/closing the main pause layer
         if (settingsPanel != null) 
@@ -102,14 +117,16 @@ public class GameMenuController : MonoBehaviour
 
     public void OnSettingsClicked()
     {
-        if (menuPanel != null) menuPanel.SetActive(false);
+        // Hide menu content but keep the container (menuPanel) active
+        // so that settingsPanel (a child) can be shown
+        if (menuContentPanel != null) menuContentPanel.SetActive(false);
         if (settingsPanel != null) settingsPanel.SetActive(true);
     }
     
     public void CloseSettings()
     {
         if (settingsPanel != null) settingsPanel.SetActive(false);
-        if (menuPanel != null) menuPanel.SetActive(true);
+        if (menuContentPanel != null) menuContentPanel.SetActive(true);
     }
 
     public void OnMainMenuClicked()
@@ -132,7 +149,7 @@ public class GameMenuController : MonoBehaviour
     private void EnsureButtonAnimations()
     {
         // Helper to auto-add hover effects if missing
-        Button[] eventButtons = { openMenuButton, resumeButton, settingsButton, mainMenuButton, quitButton };
+        Button[] eventButtons = { openMenuButton, resumeButton, settingsButton, mainMenuButton, quitButton, settingsBackButton };
         foreach (var btn in eventButtons)
         {
             if (btn != null && btn.GetComponent<UIButtonAnimation>() == null)
@@ -140,8 +157,6 @@ public class GameMenuController : MonoBehaviour
                 btn.gameObject.AddComponent<UIButtonAnimation>();
             }
         }
-        
-        // Also check settings back button if possible (implementation depends on SettingsMenu structure)
     }
 
     private void OnDestroy()
