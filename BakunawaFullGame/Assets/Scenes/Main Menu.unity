@@ -563,10 +563,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1678875113}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 24, y: -400}
-  m_SizeDelta: {x: 498.847, y: 42.9287}
+  m_AnchorMin: {x: 0, y: 0.5}
+  m_AnchorMax: {x: 1, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: -407}
+  m_SizeDelta: {x: 0, y: 42.9287}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &81769431
 MonoBehaviour:
@@ -3870,7 +3870,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1244161930}
   - component: {fileID: 1244161929}
-  - component: {fileID: 1244161928}
   m_Layer: 0
   m_Name: LoadingScreenmanager
   m_TagString: Untagged
@@ -3878,18 +3877,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1244161928
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1244161927}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7f9c6a412bb41af45ace056f95e8b213, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LoadingSceneController
 --- !u!114 &1244161929
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3908,7 +3895,7 @@ MonoBehaviour:
   progressBar: {fileID: 1191240944}
   progressSlider: {fileID: 2125158784}
   fadeDuration: 0.5
-  minimumLoadTime: 5
+  minimumLoadTime: 1.5
   useSmoothProgress: 1
   smoothFillSpeed: 5
   randomTips:
@@ -3926,6 +3913,11 @@ MonoBehaviour:
   - 'Strategy: Save high-attack cards for crucial rounds!'
   - 'Tip: Use defensive cards to block powerful enemy attacks!'
   - 'Lore: The tribes gathered around the Tower to protect the moon from the Bakunawa.'
+  loadingPhases:
+  - Initializing...
+  - Loading Assets...
+  - Compiling Shaders...
+  - Finalizing...
   cloudRect: {fileID: 1933292953}
   cloudSwaySpeed: 1
   cloudSwayDistance: 20
@@ -4178,7 +4170,7 @@ RectTransform:
   m_Father: {fileID: 314338877}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 10, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -4737,7 +4729,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1487077533
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4799,7 +4791,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 3
   m_TargetDisplay: 0
 --- !u!224 &1487077536
 RectTransform:
@@ -5500,7 +5492,7 @@ RectTransform:
   m_Father: {fileID: 1567395784}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 20, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}

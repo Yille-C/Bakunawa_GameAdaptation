@@ -151,10 +151,34 @@ public class HandManager : MonoBehaviour
         return Mathf.Clamp01(t);
     }
     
+    // --- TURN NOTIFICATIONS ---
+    Color notificationTribeColor = new Color(0.8f, 0.3f, 0.1f, 1f);
+    Color notificationBakunawaColor = new Color(0.1f, 0.5f, 1f, 1f);
+
+    IEnumerator ShowTurnNotificationRoutine(bool isPlayerTurn) 
+    {
+        string text = isPlayerTurn ? "YOUR TURN" : "BAKUNAWA'S TURN";
+        Color color = isPlayerTurn ? notificationTribeColor : notificationBakunawaColor;
+        
+        // Ensure TurnNotificationUI exists
+        if (TurnNotificationUI.Instance == null)
+        {
+             GameObject obj = new GameObject("TurnNotificationUI");
+             obj.AddComponent<TurnNotificationUI>();
+        }
+
+        yield return StartCoroutine(TurnNotificationUI.Instance.PlayTurnNotification(text, color));
+    }
+
     void Awake()
     {
         Instance = this;
         EnsureDimmer();
+        if (TurnNotificationUI.Instance == null)
+        {
+             GameObject obj = new GameObject("TurnNotificationUI");
+             obj.AddComponent<TurnNotificationUI>();
+        }
     }
 
     void EnsureDimmer()
@@ -1216,12 +1240,12 @@ public class HandManager : MonoBehaviour
                 yield return StartCoroutine(FadeTextInAndOut(combatBannerText, 2.0f));
             }
 
-            if (bannerGroup != null) { while (bannerGroup.alpha > 0) { bannerGroup.alpha -= Time.deltaTime * 3f; yield return null; } }
+        if (bannerGroup != null) { while (bannerGroup.alpha > 0) { bannerGroup.alpha -= Time.deltaTime * 3f; yield return null; } }
             combatBanner.SetActive(false);
         }
         else yield return new WaitForSeconds(1.0f);
 
-        StartBattlePhase();
+        StartCoroutine(StartBattlePhase());
     }
 
     public bool TryPlayCard(CardUI card)
@@ -1239,15 +1263,15 @@ public class HandManager : MonoBehaviour
         return true;
     }
 
-    void StartBattlePhase()
+    IEnumerator StartBattlePhase()
     {
-        inputLocked = false;
+        inputLocked = true;
 
         if (tribeLockedPanel.childCount == 0)
         {
             playCardButton.gameObject.SetActive(false);
             StartCoroutine(BakunawaSoloPlaySequence());
-            return;
+            yield break;
         }
 
         if (playerGoesFirst)
@@ -1256,10 +1280,14 @@ public class HandManager : MonoBehaviour
             pendingEnemyCard = null;
             // HIDDEN: Using Drag instead
             playCardButton.gameObject.SetActive(false); 
-            playCardButton.interactable = true;
             
             // Turn Indicator: Player's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
+            
+            yield return StartCoroutine(ShowTurnNotificationRoutine(true));
+            
+            inputLocked = false;
+            playCardButton.interactable = true;
         }
         else
         {
@@ -1272,6 +1300,8 @@ public class HandManager : MonoBehaviour
             
             // Turn Indicator: Bakunawa's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
+            
+            yield return StartCoroutine(ShowTurnNotificationRoutine(false));
             
             StartCoroutine(EnemyPlaysFirstRoutine());
         }
@@ -1297,6 +1327,8 @@ public class HandManager : MonoBehaviour
             
             // Turn Indicator: Switch to Player's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
+
+            yield return StartCoroutine(ShowTurnNotificationRoutine(true));
         }
         else
         {
@@ -1305,6 +1337,8 @@ public class HandManager : MonoBehaviour
             
             // Turn Indicator: Player's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
+
+            yield return StartCoroutine(ShowTurnNotificationRoutine(true));
         }
     }
 
@@ -1313,7 +1347,9 @@ public class HandManager : MonoBehaviour
         // Turn Indicator: Bakunawa's turn
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
         
-        yield return new WaitForSeconds(1.0f);
+        yield return StartCoroutine(ShowTurnNotificationRoutine(false));
+        
+        yield return new WaitForSeconds(0.5f);
 
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
@@ -1348,7 +1384,8 @@ public class HandManager : MonoBehaviour
         }
 
         yield return new WaitForSeconds(0.5f);
-        ContinueBattleLoop();
+        yield return new WaitForSeconds(0.5f);
+        StartCoroutine(ContinueBattleLoop());
     }
 
     IEnumerator ResolveImmediateClash(CardUI playerCard, CardUI enemyCard)
@@ -1372,23 +1409,25 @@ public class HandManager : MonoBehaviour
         if (!playerGoesFirst)
         {
             if (tribeLockedPanel.childCount > 0) StartCoroutine(EnemyPlaysFirstRoutine());
-            else ContinueBattleLoop();
+            else StartCoroutine(ContinueBattleLoop());
         }
         else
         {
-            ContinueBattleLoop();
+            StartCoroutine(ContinueBattleLoop());
         }
     }
 
-    void ContinueBattleLoop()
+    IEnumerator ContinueBattleLoop()
     {
         if (tribeLockedPanel.childCount > 0)
         {
-            inputLocked = false;
-            playCardButton.interactable = true;
-            
             // Turn Indicator: Player's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
+
+            yield return StartCoroutine(ShowTurnNotificationRoutine(true));
+
+            inputLocked = false;
+            playCardButton.interactable = true;
         }
         else
         {
@@ -1404,6 +1443,8 @@ public class HandManager : MonoBehaviour
     {
         // Turn Indicator: Bakunawa's turn (solo play)
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
+
+        yield return StartCoroutine(ShowTurnNotificationRoutine(false));
         
         while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {

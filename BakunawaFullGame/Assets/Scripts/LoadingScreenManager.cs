@@ -44,6 +44,16 @@ public class LoadingScreenManager : MonoBehaviour
     [TextArea(2, 4)]
     [SerializeField] private string[] randomTips;
 
+    [Header("Loading Text Phases")]
+    [Tooltip("Text to display at different progress stages.")]
+    [SerializeField] private string[] loadingPhases = new string[] 
+    { 
+        "Initializing...", 
+        "Loading Assets...", 
+        "Compiling Shaders...", 
+        "Finalizing..." 
+    };
+
     [Header("Animation Details")]
     [Tooltip("The Cloud object to animate (Horizontal movement).")]
     [SerializeField] private RectTransform cloudRect;
@@ -299,9 +309,25 @@ public class LoadingScreenManager : MonoBehaviour
                 progressSlider.value = currentFill;
             
             // Update Text
-            string msg = $"LOADING... {(currentFill * 100):0}%";
-            if (legacyText != null) legacyText.text = msg;
-            if (tmpText != null) tmpText.text = msg;
+            if (loadingPhases != null && loadingPhases.Length > 0)
+            {
+                // Calculate phase index based on progress (0 to 1)
+                // Use slightly less than 1.0 multiplier to ensure the last phase shows at 100%
+                int phaseIndex = Mathf.FloorToInt(currentFill * loadingPhases.Length);
+                if (phaseIndex >= loadingPhases.Length) phaseIndex = loadingPhases.Length - 1;
+                
+                string phaseText = loadingPhases[phaseIndex];
+                string msg = $"{phaseText} {(currentFill * 100):0}%";
+                
+                if (legacyText != null) legacyText.text = msg;
+                if (tmpText != null) tmpText.text = msg;
+            }
+            else
+            {
+                string msg = $"LOADING... {(currentFill * 100):0}%";
+                if (legacyText != null) legacyText.text = msg;
+                if (tmpText != null) tmpText.text = msg;
+            }
 
             // Check completion
             // We are done if:
