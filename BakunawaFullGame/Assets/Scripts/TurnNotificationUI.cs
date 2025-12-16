@@ -31,9 +31,19 @@ public class TurnNotificationUI : MonoBehaviour
     private Bloom bloomEffect;
     private float originalBloomIntensity = 0f;
     private float originalBloomThreshold = 0.9f;
+    
+    // Prevent overlapping notifications
+    private bool isPlaying = false;
+    private Coroutine currentNotificationCoroutine;
 
     private void Awake()
     {
+        // Singleton - destroy duplicates
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         Instance = this;
         EnsureUI();
     }
@@ -104,18 +114,20 @@ public class TurnNotificationUI : MonoBehaviour
                 
                 notificationText = textObj.AddComponent<TextMeshProUGUI>();
                 
-                // Load display font
+                // Load Barbara SDF font
                 if (notificationFont == null)
                 {
-                    notificationFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/Bangers SDF");
+                    // Try Resources folder first
+                    notificationFont = Resources.Load<TMP_FontAsset>("Fonts/Barbara SDF 1");
                 }
                 
                 if (notificationFont == null)
                 {
+                    // Fallback: Search for any Barbara font
                     TMP_FontAsset[] allFonts = Resources.LoadAll<TMP_FontAsset>("");
                     foreach (var f in allFonts)
                     {
-                        if (f.name.Contains("Bangers") || f.name.Contains("Barbara"))
+                        if (f.name.Contains("Barbara"))
                         {
                             notificationFont = f;
                             break;
@@ -130,6 +142,7 @@ public class TurnNotificationUI : MonoBehaviour
                 }
                 else
                 {
+                     Debug.LogWarning("TurnNotificationUI: Barbara SDF font not found! Using default.");
                      notificationText.font = TMP_Settings.defaultFontAsset;
                 }
                 
@@ -201,9 +214,32 @@ public class TurnNotificationUI : MonoBehaviour
 
     public IEnumerator PlayTurnNotification(string text, Color textColor)
     {
-        EnsureUI(); 
+        // If already playing, stop the current one first
+        if (isPlaying && currentNotificationCoroutine != null)
+        {
+            StopCoroutine(currentNotificationCoroutine);
+            // Clean up - hide canvas immediately
+            if (overlayCanvas != null) overlayCanvas.SetActive(false);
+            // Restore bloom
+            if (bloomEffect != null)
+            {
+                bloomEffect.intensity.value = originalBloomIntensity;
+                bloomEffect.threshold.value = originalBloomThreshold;
+            }
+        }
         
-        if (overlayCanvas != null) overlayCanvas.SetActive(true);
+        isPlaying = true;
+        
+        EnsureUI();
+        
+        if (overlayCanvas == null)
+        {
+            Debug.LogWarning("[TurnNotificationUI] overlayCanvas is null after EnsureUI!");
+            isPlaying = false;
+            yield break;
+        }
+        
+        overlayCanvas.SetActive(true);
         
         // Enable Bloom for notification
         if (bloomEffect != null)
@@ -335,6 +371,8 @@ public class TurnNotificationUI : MonoBehaviour
         }
 
         if (overlayCanvas != null) overlayCanvas.SetActive(false);
+        
+        isPlaying = false;
     }
 
     // --- PARTICLE SYSTEM (Adapted from HandManager) ---
