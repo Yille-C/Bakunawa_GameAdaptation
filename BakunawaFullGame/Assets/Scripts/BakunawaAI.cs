@@ -21,6 +21,7 @@ public class BakunawaAI : MonoBehaviour
 
     [Header("Settings")]
     public float playCardScale = 1.2f;
+    public float lockedScale = 0.6f; // Scale for cards in locked area (match player's scale)
     public float discardScale = 0.8f;
 
     private List<CardUI> myHand = new List<CardUI>();
@@ -124,6 +125,8 @@ public class BakunawaAI : MonoBehaviour
         {
             card.transform.SetParent(lockedArea);
             card.SetLockedState(true);
+            // Apply locked scale to match player's card size
+            card.transform.localScale = new Vector3(lockedScale, lockedScale, lockedScale);
         }
     }
 

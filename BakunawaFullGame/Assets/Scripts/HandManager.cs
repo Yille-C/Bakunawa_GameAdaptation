@@ -909,6 +909,9 @@ public class HandManager : MonoBehaviour
 
     IEnumerator EndRoundSequence()
     {
+        // Clear turn indicators at round end
+        if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.ClearTurnIndicators();
+        
         int pScore = 0;
         int bScore = 0;
         bool playerLost = false;
@@ -1009,6 +1012,9 @@ public class HandManager : MonoBehaviour
         alayBuffActive = false;
         alayDebuffActive = false;
         agongPlayedThisRound = false;
+
+        // Clear turn indicators during planning phase
+        if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.ClearTurnIndicators();
 
         if (planningBanner != null)
         {
@@ -1251,6 +1257,9 @@ public class HandManager : MonoBehaviour
             // HIDDEN: Using Drag instead
             playCardButton.gameObject.SetActive(false); 
             playCardButton.interactable = true;
+            
+            // Turn Indicator: Player's turn
+            if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
         }
         else
         {
@@ -1260,6 +1269,10 @@ public class HandManager : MonoBehaviour
             // HIDDEN: Using Drag instead
             playCardButton.gameObject.SetActive(false);
             playCardButton.interactable = false;
+            
+            // Turn Indicator: Bakunawa's turn
+            if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
+            
             StartCoroutine(EnemyPlaysFirstRoutine());
         }
     }
@@ -1281,16 +1294,25 @@ public class HandManager : MonoBehaviour
             // Allow Player Action
             inputLocked = false;
             playCardButton.interactable = true;
+            
+            // Turn Indicator: Switch to Player's turn
+            if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
         }
         else
         {
             inputLocked = false;
             playCardButton.interactable = true;
+            
+            // Turn Indicator: Player's turn
+            if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
         }
     }
 
     IEnumerator BakunawaResponseSequence(CardUI playerCard)
     {
+        // Turn Indicator: Bakunawa's turn
+        if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
+        
         yield return new WaitForSeconds(1.0f);
 
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
@@ -1364,6 +1386,9 @@ public class HandManager : MonoBehaviour
         {
             inputLocked = false;
             playCardButton.interactable = true;
+            
+            // Turn Indicator: Player's turn
+            if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
         }
         else
         {
@@ -1377,6 +1402,9 @@ public class HandManager : MonoBehaviour
 
     IEnumerator BakunawaSoloPlaySequence()
     {
+        // Turn Indicator: Bakunawa's turn (solo play)
+        if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
+        
         while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             yield return new WaitForSeconds(1.0f);

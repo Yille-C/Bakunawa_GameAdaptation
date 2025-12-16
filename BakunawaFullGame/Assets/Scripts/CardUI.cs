@@ -432,8 +432,21 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         // Skip animation for handArea - CurvedHandLayout handles that
         if (p == HandManager.Instance.handArea) return;
         
-        // Only animate in tribeSelectedPanel, tribeLockedPanel OR battleZone
-        if (p != HandManager.Instance.tribeSelectedPanel && p != HandManager.Instance.tribeLockedPanel && p != HandManager.Instance.battleZone) return;
+        // Check if this card is in Bakunawa's areas
+        bool inBakunawaArea = false;
+        if (BakunawaAI.Instance != null)
+        {
+            inBakunawaArea = (p == BakunawaAI.Instance.lockedArea || 
+                              p == BakunawaAI.Instance.handArea || 
+                              p == BakunawaAI.Instance.battleZone);
+        }
+        
+        // Only animate in tribe panels, battleZone, or Bakunawa areas
+        bool inTribeArea = (p == HandManager.Instance.tribeSelectedPanel || 
+                           p == HandManager.Instance.tribeLockedPanel || 
+                           p == HandManager.Instance.battleZone);
+        
+        if (!inTribeArea && !inBakunawaArea) return;
 
         // Calculate Target Scale & Position for locked hand area
         Vector3 targetScaleVec = baseScale;
@@ -448,7 +461,15 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             
             // Apply straight to local vars to animate logic below
         }
-        else if (p == HandManager.Instance.battleZone)
+        else if (BakunawaAI.Instance != null && p == BakunawaAI.Instance.lockedArea)
+        {
+            // Bakunawa's locked cards - use Bakunawa's locked scale
+            float scale = BakunawaAI.Instance.lockedScale;
+            targetScaleVec = baseScale * scale;
+            targetY = 0f;
+        }
+        else if (p == HandManager.Instance.battleZone || 
+                 (BakunawaAI.Instance != null && p == BakunawaAI.Instance.battleZone))
         {
              // Battle Zone Logic: Scale to 'playCardScale' or 1.0
              float scale = (HandManager.Instance != null) ? HandManager.Instance.playCardScale : 1f;
