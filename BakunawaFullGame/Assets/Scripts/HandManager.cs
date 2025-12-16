@@ -192,11 +192,20 @@ public class HandManager : MonoBehaviour
         {
             GameObject dimObj = new GameObject("ClashDimmer");
             dimObj.transform.SetParent(rootCanvas.transform, false);
-            dimObj.transform.SetAsFirstSibling(); // Put it behind most things, but we'll control draw order via card reparenting
+            dimObj.transform.SetAsFirstSibling(); // Put it behind most things
             
             clashDimmer = dimObj.AddComponent<Image>();
             clashDimmer.color = new Color(0, 0, 0, 0f); // Start transparent
             clashDimmer.raycastTarget = false;
+            
+            // Add Canvas with sorting order to control render layer
+            // Cards during clash have sortingOrder 2000, dimmer should be just below at 1999
+            Canvas dimmerCanvas = dimObj.AddComponent<Canvas>();
+            dimmerCanvas.overrideSorting = true;
+            dimmerCanvas.sortingOrder = 1999;
+            
+            // GraphicRaycaster is needed for the Image to render properly with its own canvas
+            dimObj.AddComponent<GraphicRaycaster>();
             
             // Stretch
             RectTransform rt = dimObj.GetComponent<RectTransform>();
@@ -212,10 +221,8 @@ public class HandManager : MonoBehaviour
         if (clashDimmer == null) EnsureDimmer();
         if (clashDimmer == null) yield break;
 
-        // Ensure dimmer is just behind the front-most elements (like our clashing cards)
-        // Since cards are moved to LastSibling of Root, the dimmer needs to be SecondToLast? 
-        // Or just let cards pop over it. 
-        // We'll set dimmer to LastSibling first, then when cards move to root they will become LastSibling (on top of dimmer).
+        // Dimmer uses sortingOrder 1999, cards use 2000 during clash
+        // Sibling order is kept as fallback but Canvas sorting order is primary
         if (fadeIn) clashDimmer.transform.SetAsLastSibling();
 
         float startAlpha = clashDimmer.color.a;
@@ -255,15 +262,57 @@ public class HandManager : MonoBehaviour
         if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
         Transform rootT = rootCanvas.transform;
 
-        // Capture Start Positions (World Space)
-        Vector3 pStartPos = playerCard.transform.position;
-        Vector3 eStartPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
 
         // 3. Move to Root - This "frees" them from the LayoutGroup
         playerCard.transform.SetParent(rootT, true); // worldPositionStays = true
         if (enemyCard != null) enemyCard.transform.SetParent(rootT, true);
 
-        // Ensure they render on top
+        // DISABLE UPDATE LOGIC & FORCE SORTING
+        playerCard.enabled = false;
+        if (enemyCard != null) enemyCard.enabled = false;
+        
+        // Get root canvas sorting layer for consistency
+        string rootSortingLayer = rootCanvas.sortingLayerName;
+        
+        // Ensure Canvas exists and configure for high sorting order
+        Canvas pCanvas = playerCard.GetComponent<Canvas>();
+        if (pCanvas == null) pCanvas = playerCard.gameObject.AddComponent<Canvas>();
+        pCanvas.enabled = true;
+        pCanvas.overrideSorting = true;
+        pCanvas.sortingLayerName = rootSortingLayer; // Match root canvas sorting layer
+        pCanvas.sortingOrder = 2000;
+        
+        // Ensure GraphicRaycaster for proper rendering with Canvas
+        GraphicRaycaster pRaycaster = playerCard.GetComponent<GraphicRaycaster>();
+        if (pRaycaster == null) pRaycaster = playerCard.gameObject.AddComponent<GraphicRaycaster>();
+        
+        // Ensure Layer matches Root (in case Camera culls specific layers)
+        playerCard.gameObject.layer = rootT.gameObject.layer;
+        
+        // DEBUG: Log clash animation setup
+        Debug.Log($"[ClashAnim] Player card canvas: sortingOrder={pCanvas.sortingOrder}, sortingLayer={pCanvas.sortingLayerName}, enabled={pCanvas.enabled}");
+
+        if (enemyCard != null)
+        {
+             // Ensure Canvas exists and configure for high sorting order
+             Canvas eCanvas = enemyCard.GetComponent<Canvas>();
+             if (eCanvas == null) eCanvas = enemyCard.gameObject.AddComponent<Canvas>();
+             eCanvas.enabled = true;
+             eCanvas.overrideSorting = true;
+             eCanvas.sortingLayerName = rootSortingLayer; // Match root canvas sorting layer
+             eCanvas.sortingOrder = 2000;
+             
+             // Ensure GraphicRaycaster for proper rendering with Canvas
+             GraphicRaycaster eRaycaster = enemyCard.GetComponent<GraphicRaycaster>();
+             if (eRaycaster == null) eRaycaster = enemyCard.gameObject.AddComponent<GraphicRaycaster>();
+             
+             enemyCard.gameObject.layer = rootT.gameObject.layer;
+             
+             // DEBUG: Log enemy card setup
+             Debug.Log($"[ClashAnim] Enemy card canvas: sortingOrder={eCanvas.sortingOrder}, sortingLayer={eCanvas.sortingLayerName}, enabled={eCanvas.enabled}");
+        }
+
+        // Ensure they render on top (Sibling index fallback)
         playerCard.transform.SetAsLastSibling();
         if (enemyCard != null) enemyCard.transform.SetAsLastSibling();
 
@@ -271,24 +320,38 @@ public class HandManager : MonoBehaviour
         playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
 
-        // Define Key Positions relative to Screen Center
-        // We use the Root Canvas as the visual center anchor for the CLASH (Screen Center)
-        Vector3 clashPoint = rootT.position; // Screen Center
-        Vector3 centerPoint = battleZone.position; // Return target reference
-
-        float verticalOffset = 350f; // Increase start distance for more drama
+        // === LOCAL POSITION BASED ANIMATION (Works with Screen Space - Camera) ===
+        // After reparenting, capture local positions for animation
+        // Cards were reparented with worldPositionStays=true, so their local positions are now relative to root canvas
         
-        Vector3 pReadyPos = clashPoint + new Vector3(0, -verticalOffset, 0);
-        Vector3 eReadyPos = clashPoint + new Vector3(0, verticalOffset, 0); // Enemy comes from top
-        if (enemyCard == null) eReadyPos = clashPoint; // Dummy target center
+        RectTransform rootRect = rootCanvas.GetComponent<RectTransform>();
+        Vector3 pStartLocalPos = playerCard.transform.localPosition;
+        Vector3 eStartLocalPos = (enemyCard != null) ? enemyCard.transform.localPosition : Vector3.zero;
+        
+        // DEBUG: Log starting positions
+        Debug.Log($"[ClashAnim] Start positions - Player: {pStartLocalPos}, Enemy: {eStartLocalPos}");
+        Debug.Log($"[ClashAnim] Root canvas size: {rootRect.rect.size}, position: {rootRect.position}");
+        
+        // Clash point is center of canvas (local 0,0,0) - ensure Z stays at 0 for proper rendering
+        Vector3 clashPointLocal = Vector3.zero;
+        
+        // Vertical offset in canvas units (these should match the canvas scale)
+        // For a 1920x1080 reference resolution, 350 is a reasonable offset
+        float verticalOffset = 350f;
+        
+        // Ready positions (where cards wind up before lunging)
+        Vector3 pReadyLocalPos = clashPointLocal + new Vector3(0, -verticalOffset, 0f);
+        Vector3 eReadyLocalPos = clashPointLocal + new Vector3(0, verticalOffset, 0f);
+        if (enemyCard == null) eReadyLocalPos = clashPointLocal;
+        
+        Debug.Log($"[ClashAnim] Ready positions - Player: {pReadyLocalPos}, Enemy: {eReadyLocalPos}");
 
         // === PHASE 1: WINDUP / ALIGN (0.4s) ===
-        // Move from wherever they are (Hand/Deck) to the "Ready" positions
         float windupTime = 0.4f;
         float elapsed = 0f;
         
-        Quaternion pStartRot = playerCard.transform.rotation;
-        Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.rotation : Quaternion.identity;
+        Quaternion pStartRot = playerCard.transform.localRotation;
+        Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.localRotation : Quaternion.identity;
 
         // Scale Up Logic
         Vector3 normalScale = new Vector3(playCardScale, playCardScale, playCardScale);
@@ -299,14 +362,14 @@ public class HandManager : MonoBehaviour
             float t = elapsed / windupTime;
             t = t * t * (3f - 2f * t); // SmoothStep
 
-            playerCard.transform.position = Vector3.Lerp(pStartPos, pReadyPos, t);
-            playerCard.transform.rotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
+            playerCard.transform.localPosition = Vector3.Lerp(pStartLocalPos, pReadyLocalPos, t);
+            playerCard.transform.localRotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
             playerCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
 
             if (enemyCard != null)
             {
-                enemyCard.transform.position = Vector3.Lerp(eStartPos, eReadyPos, t);
-                enemyCard.transform.rotation = Quaternion.Lerp(eStartRot, Quaternion.identity, t);
+                enemyCard.transform.localPosition = Vector3.Lerp(eStartLocalPos, eReadyLocalPos, t);
+                enemyCard.transform.localRotation = Quaternion.Lerp(eStartRot, Quaternion.identity, t);
                 enemyCard.transform.localScale = Vector3.Lerp(normalScale, clashScaleVec, t);
             }
             elapsed += Time.deltaTime;
@@ -339,8 +402,9 @@ public class HandManager : MonoBehaviour
         float collisionGap = 0f; 
         float offset = cardHalfHeight + collisionGap;
 
-        Vector3 pImpactPos = clashPoint + new Vector3(0, -offset, 0);
-        Vector3 eImpactPos = clashPoint + new Vector3(0, offset, 0);
+        // Impact positions in LOCAL space
+        Vector3 pImpactLocalPos = clashPointLocal + new Vector3(0, -offset, 0f);
+        Vector3 eImpactLocalPos = clashPointLocal + new Vector3(0, offset, 0f);
 
         // STRETCH VECTORS (Elongate on Y, thin on X)
         // Apply relative to the current clashScaleVec
@@ -351,7 +415,7 @@ public class HandManager : MonoBehaviour
             float t = elapsed / lungeTime;
             t = t * t * t; // Cubic Ease In (Exciting!)
 
-            playerCard.transform.position = Vector3.Lerp(pReadyPos, pImpactPos, t);
+            playerCard.transform.localPosition = Vector3.Lerp(pReadyLocalPos, pImpactLocalPos, t);
             
             // Apply STRETCH as velocity increases
             // Max stretch at t=1
@@ -359,7 +423,7 @@ public class HandManager : MonoBehaviour
 
             if (enemyCard != null)
             {
-                enemyCard.transform.position = Vector3.Lerp(eReadyPos, eImpactPos, t);
+                enemyCard.transform.localPosition = Vector3.Lerp(eReadyLocalPos, eImpactLocalPos, t);
                 enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
             }
             elapsed += Time.deltaTime;
@@ -367,9 +431,8 @@ public class HandManager : MonoBehaviour
         }
 
         // Snap to final collision position
-        playerCard.transform.position = pImpactPos;
-        if (enemyCard != null) enemyCard.transform.position = eImpactPos;
-
+        playerCard.transform.localPosition = pImpactLocalPos;
+        if (enemyCard != null) enemyCard.transform.localPosition = eImpactLocalPos;
 
         // === PHASE 4: IMPACT (One Frame + Shake) ===
         // Visuals
@@ -382,13 +445,18 @@ public class HandManager : MonoBehaviour
         float shakeMagnitude = 15f; // Impactful jitter
         float shakeTimer = 0f;
         
-        // SPAWN SPARKS
-        CreateImpactSparks(clashPoint);
+        // SPAWN SPARKS - use midpoint for particle effects
+        Vector3 sparkPos = rootT.position; // Default to center
+        if (enemyCard != null)
+        {
+            sparkPos = Vector3.Lerp(playerCard.transform.position, enemyCard.transform.position, 0.5f);
+        }
+        CreateImpactSparks(sparkPos);
 
-        // Start Recoil concurrently with shake
+        // Start Recoil concurrently with shake - use LOCAL positions
         float recoilTime = 0.3f;
-        Vector3 pRecoilPos = pImpactPos + new Vector3(0, -50f, 0);
-        Vector3 eRecoilPos = eImpactPos + new Vector3(0, 50f, 0);
+        Vector3 pRecoilLocalPos = pImpactLocalPos + new Vector3(0, -50f, 0);
+        Vector3 eRecoilLocalPos = eImpactLocalPos + new Vector3(0, 50f, 0);
 
         // SQUASH TARGET (Flatten on Y, widen on X)
         // This replaces the simple scale punch. We squash HARD then spring back.
@@ -400,9 +468,9 @@ public class HandManager : MonoBehaviour
             float t = shakeTimer / recoilTime;
             t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out Recoil
 
-            // Baset Recoil Position
-            Vector3 currentRecoilP = Vector3.Lerp(pImpactPos, pRecoilPos, t);
-            Vector3 currentRecoilE = Vector3.Lerp(eImpactPos, eRecoilPos, t);
+            // Base Recoil Position (LOCAL)
+            Vector3 currentRecoilP = Vector3.Lerp(pImpactLocalPos, pRecoilLocalPos, t);
+            Vector3 currentRecoilE = Vector3.Lerp(eImpactLocalPos, eRecoilLocalPos, t);
 
             // ADD VIOLENT SHAKE (Jitter)
             if (shakeTimer < shakeDuration)
@@ -410,8 +478,8 @@ public class HandManager : MonoBehaviour
                float strength = 1f - (shakeTimer / shakeDuration);
                Vector3 cardJitter = (Vector3)(Random.insideUnitCircle * shakeMagnitude * strength);
                
-               playerCard.transform.position = currentRecoilP + cardJitter;
-               if (enemyCard != null) enemyCard.transform.position = currentRecoilE + cardJitter;
+               playerCard.transform.localPosition = currentRecoilP + cardJitter;
+               if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE + cardJitter;
 
                // SQUASH AND STRETCH DECAY LOGIC
                // 0.0 -> 0.1 : Squash
@@ -435,8 +503,8 @@ public class HandManager : MonoBehaviour
             }
             else 
             {
-               playerCard.transform.position = currentRecoilP;
-               if (enemyCard != null) enemyCard.transform.position = currentRecoilE;
+               playerCard.transform.localPosition = currentRecoilP;
+               if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE;
                
                playerCard.transform.localScale = clashScaleVec;
                if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
@@ -484,13 +552,13 @@ public class HandManager : MonoBehaviour
         Vector3 pFinalPos = playerCard.transform.position;
         Vector3 eFinalPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
 
-        // Reset to Recoil pos to start return flight
+        // Reset to Recoil pos to start return flight (use LOCAL positions)
         // Requires disabling layout again so we can move them freely
         pLe.ignoreLayout = true;
         if (eLe != null) eLe.ignoreLayout = true;
         
-        playerCard.transform.position = pRecoilPos;
-        if (enemyCard != null) enemyCard.transform.position = eRecoilPos;
+        playerCard.transform.localPosition = pRecoilLocalPos;
+        if (enemyCard != null) enemyCard.transform.localPosition = eRecoilLocalPos;
         
         // === ANIMATE TO PILE ===
         // Skip the old "return to board" logic - go directly to pile animation
@@ -581,11 +649,21 @@ public class HandManager : MonoBehaviour
         playerCard.transform.localRotation = pPileTargetRot;
         playerCard.transform.localScale = normalScale;
         
+        // RESET SORTING ORDER
+        // Important: Reset sorting so cards don't appear over result banners
+        Canvas pCanvasInfo = playerCard.GetComponent<Canvas>();
+        if (pCanvasInfo != null) pCanvasInfo.overrideSorting = false;
+        playerCard.enabled = true; // Re-enable update logic
+        
         if (enemyCard != null)
         {
             enemyCard.transform.localPosition = ePileTargetLocal;
             enemyCard.transform.localRotation = ePileTargetRot;
             enemyCard.transform.localScale = normalScale;
+            
+            Canvas eCanvasInfo = enemyCard.GetComponent<Canvas>();
+            if (eCanvasInfo != null) eCanvasInfo.overrideSorting = false;
+            enemyCard.enabled = true;
         }
     }
 
@@ -1748,6 +1826,13 @@ public class HandManager : MonoBehaviour
         
         container.transform.localScale = Vector3.one;
         container.transform.SetAsLastSibling(); // Top of everything
+        
+        // Add Canvas with high sorting order to render above dimmer (1999) and cards (2000)
+        Canvas sparkCanvas = container.AddComponent<Canvas>();
+        sparkCanvas.overrideSorting = true;
+        sparkCanvas.sortingLayerName = root != null ? root.sortingLayerName : "Default";
+        sparkCanvas.sortingOrder = 2001; // Above cards (2000)
+        container.AddComponent<GraphicRaycaster>();
 
         // 2. Spawn Sprites
         int sparkCount = 20;

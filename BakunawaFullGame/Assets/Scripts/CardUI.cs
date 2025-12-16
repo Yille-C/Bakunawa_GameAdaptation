@@ -254,7 +254,27 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     public void OnDrag(PointerEventData eventData)
     {
         if (!isDragging) return;
-        transform.position = eventData.position;
+
+        // For Screen Space - Camera, we must convert screen point to local point
+        Canvas root = GetComponentInParent<Canvas>();
+        if (root != null && root.rootCanvas != null) root = root.rootCanvas;
+        
+        if (root != null)
+        {
+            RectTransform rootRect = root.GetComponent<RectTransform>();
+            Vector2 localPos;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRect, eventData.position, root.worldCamera, out localPos))
+            {
+                // Set position in local space of the canvas
+                // Use Z = 0 to stay on canvas, rely on sorting order
+                transform.localPosition = new Vector3(localPos.x, localPos.y, 0f);
+            }
+        }
+        else
+        {
+            // Fallback for Overlay
+            transform.position = eventData.position;
+        }
     }
 
     public void OnEndDrag(PointerEventData eventData)
