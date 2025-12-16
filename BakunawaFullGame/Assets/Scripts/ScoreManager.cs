@@ -1,162 +1,196 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 public class ScoreManager : MonoBehaviour
 {
     public static ScoreManager Instance;
 
-    [Header("Tower Slider")]
+    [Header("Score Tracking")]
+    public int playerTotal = 0;
+    public int bakunawaTotal = 0;
+    public int enemyDebuffValue = 0;
+    public int playerDebuffValue = 0;
+    public int lastEnemyDebuff = 0;
+    public int lastPlayerDebuff = 0;
+
+    [Header("UI References")]
+    public Text playerScoreText;
+    public Text bakunawaScoreText;
     public Slider towerSlider;
     public int currentTowerScore = 0;
 
-    [Header("UI Text")]
-    public Text playerScoreText;
-    public Text bakunawaScoreText;
+    [Header("Debuff Popup")]
+    public GameObject debuffPopupPrefab;
+    public Transform playerDebuffSpawnPoint;
+    public Transform bakunawaDebuffSpawnPoint;
 
-    [Header("Popup System")]
-    public GameObject popupPrefab;
-    public Transform playerPopupSpot;
-    public Transform bakunawaPopupSpot;
-
-    [Header("Zones")]
+    [Header("Card Zones")]
     public Transform playerZone;
     public Transform bakunawaZone;
 
-    public int playerTotal;
-    public int bakunawaTotal;
-
-    public int enemyDebuffValue = 0;
-    public int playerDebuffValue = 0;
-
-    private int lastEnemyDebuff = 0;
-    private int lastPlayerDebuff = 0;
-
     void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-    }
-
-    void Start()
-    {
-        if (towerSlider != null)
+        if (Instance == null)
         {
-            towerSlider.minValue = -5;
-            towerSlider.maxValue = 5;
-            towerSlider.wholeNumbers = true;
-            towerSlider.value = 0;
+            Instance = this;
         }
-        currentTowerScore = 0;
-        enemyDebuffValue = 0;
-        playerDebuffValue = 0;
-        lastEnemyDebuff = 0;
-        lastPlayerDebuff = 0;
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     void Update()
     {
-        CalculateBoardTotals();
-        CheckForDebuffPopups();
+        UpdateScoreUI();
     }
 
-    void CheckForDebuffPopups()
+    public void AddScore(int tribesmanAttack, int bakunawaAttack)
     {
-        if (playerDebuffValue > lastPlayerDebuff)
-        {
-            int diff = playerDebuffValue - lastPlayerDebuff;
-            Debug.Log($"Player Debuffed! Spawning popup for -{diff}");
-            CreatePopup(playerPopupSpot, -diff, "Atk");
-        }
-        lastPlayerDebuff = playerDebuffValue;
+        playerTotal += tribesmanAttack;
+        bakunawaTotal += bakunawaAttack;
 
-        if (enemyDebuffValue > lastEnemyDebuff)
-        {
-            int diff = enemyDebuffValue - lastEnemyDebuff;
-            Debug.Log($"Bakunawa Debuffed! Spawning popup for -{diff}");
-            CreatePopup(bakunawaPopupSpot, -diff, "Atk");
-        }
-        lastEnemyDebuff = enemyDebuffValue;
-    }
-
-    void CreatePopup(Transform spot, int amount, string label)
-    {
-        if (popupPrefab != null && spot != null)
-        {
-            GameObject popup = Instantiate(popupPrefab, spot.position, Quaternion.identity, spot);
-            DamagePopup dp = popup.GetComponent<DamagePopup>();
-            if (dp != null) dp.Setup(amount, label);
-        }
+        Debug.Log($"Scores Updated! Tribesmen: {playerTotal} | Bakunawa: {bakunawaTotal}");
     }
 
     public void ResolveClash(int pAtk, int eAtk)
     {
-        Debug.Log($"Clash! P:{pAtk} vs B:{eAtk}");
+        Debug.Log($"Clash! Tribesmen: {pAtk} vs Bakunawa: {eAtk}");
     }
 
     public void ResolveRound()
     {
-        Debug.Log($"ROUND END! Player: {playerTotal} vs Bakunawa: {bakunawaTotal}");
+        int finalPlayerScore = playerTotal - enemyDebuffValue;
+        int finalBakunawaScore = bakunawaTotal - playerDebuffValue;
 
-        if (playerTotal > bakunawaTotal) UpdateTowerScore(-1);
-        else if (bakunawaTotal > playerTotal) UpdateTowerScore(1);
+        finalPlayerScore = Mathf.Max(0, finalPlayerScore);
+        finalBakunawaScore = Mathf.Max(0, finalBakunawaScore);
+
+        Debug.Log($"Round Resolved! Tribesmen: {finalPlayerScore} | Bakunawa: {finalBakunawaScore}");
+
+        int difference = finalPlayerScore - finalBakunawaScore;
+
+        if (difference > 0)
+        {
+            UpdateTowerScore(1);
+            Debug.Log("Tribesmen win this round!");
+        }
+        else if (difference < 0)
+        {
+            UpdateTowerScore(-1);
+            Debug.Log("Bakunawa wins this round!");
+        }
+        else
+        {
+            Debug.Log("Round is a tie!");
+        }
     }
 
     public void UpdateTowerScore(int change)
     {
-        int previousScore = currentTowerScore;
-        int nextScore = currentTowerScore + change;
+        currentTowerScore = Mathf.Clamp(currentTowerScore + change, -5, 5);
 
-        if (nextScore == 0)
+        if (towerSlider != null)
         {
-            if (previousScore > 0 && change < 0) nextScore = -1;
-            else if (previousScore < 0 && change > 0) nextScore = 1;
+            towerSlider.value = currentTowerScore;
         }
 
-        currentTowerScore = Mathf.Clamp(nextScore, -5, 5);
-        if (towerSlider != null) towerSlider.value = currentTowerScore;
-
-        // --- NEW: INSTANT WIN CHECK ---
         if (currentTowerScore <= -5)
         {
-            if (HandManager.Instance != null) HandManager.Instance.TriggerGameOver("Tribesmen");
+            if (HandManager.Instance != null)
+            {
+                HandManager.Instance.TriggerGameOver("Tribesmen");
+            }
         }
-        else if (currentTowerScore >= 5)
+
+        if (currentTowerScore >= 5)
         {
-            if (HandManager.Instance != null) HandManager.Instance.TriggerGameOver("Bakunawa");
+            if (HandManager.Instance != null)
+            {
+                HandManager.Instance.TriggerGameOver("Bakunawa");
+            }
         }
-        // ------------------------------
     }
 
-    void CalculateBoardTotals()
+    public void ResetScores()
     {
-        int tempPlayerTotal = 0;
-        int tempBakunawaTotal = 0;
+        playerTotal = 0;
+        bakunawaTotal = 0;
+        enemyDebuffValue = 0;
+        playerDebuffValue = 0;
+        lastEnemyDebuff = 0;
+        lastPlayerDebuff = 0;
+
+        Debug.Log("Scores reset for new round");
+    }
+
+    void UpdateScoreUI()
+    {
+        int playerScore = 0;
+        int bakunawaScore = 0;
 
         if (playerZone != null)
         {
-            foreach (Transform card in playerZone)
+            foreach (Transform t in playerZone)
             {
-                CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null) tempPlayerTotal += display.currentAttack;
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) playerScore += cd.currentAttack;
             }
         }
 
         if (bakunawaZone != null)
         {
-            foreach (Transform card in bakunawaZone)
+            foreach (Transform t in bakunawaZone)
             {
-                CardDisplay display = card.GetComponent<CardDisplay>();
-                if (display != null) tempBakunawaTotal += display.currentAttack;
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null) bakunawaScore += cd.currentAttack;
             }
         }
 
-        tempPlayerTotal -= playerDebuffValue;
-        tempBakunawaTotal -= enemyDebuffValue;
+        playerTotal = playerScore;
+        bakunawaTotal = bakunawaScore;
 
-        playerTotal = Mathf.Max(0, tempPlayerTotal);
-        bakunawaTotal = Mathf.Max(0, tempBakunawaTotal);
+        if (playerScoreText != null)
+        {
+            playerScoreText.text = playerTotal.ToString();
+        }
 
-        if (playerScoreText != null) playerScoreText.text = playerTotal.ToString();
-        if (bakunawaScoreText != null) bakunawaScoreText.text = bakunawaTotal.ToString();
+        if (bakunawaScoreText != null)
+        {
+            bakunawaScoreText.text = bakunawaTotal.ToString();
+        }
+    }
+
+    public void ApplyDebuffToEnemy(int amount)
+    {
+        enemyDebuffValue += amount;
+        lastEnemyDebuff = amount;
+
+        if (debuffPopupPrefab != null && bakunawaDebuffSpawnPoint != null)
+        {
+            GameObject popup = Instantiate(debuffPopupPrefab, bakunawaDebuffSpawnPoint.position, Quaternion.identity, bakunawaDebuffSpawnPoint.root);
+            DamagePopup dp = popup.GetComponent<DamagePopup>();
+            if (dp != null)
+            {
+                dp.Setup(-amount, "Defense");
+            }
+        }
+    }
+
+    public void ApplyDebuffToPlayer(int amount)
+    {
+        playerDebuffValue += amount;
+        lastPlayerDebuff = amount;
+
+        if (debuffPopupPrefab != null && playerDebuffSpawnPoint != null)
+        {
+            GameObject popup = Instantiate(debuffPopupPrefab, playerDebuffSpawnPoint.position, Quaternion.identity, playerDebuffSpawnPoint.root);
+            DamagePopup dp = popup.GetComponent<DamagePopup>();
+            if (dp != null)
+            {
+                dp.Setup(-amount, "Defense");
+            }
+        }
     }
 }

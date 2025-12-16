@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -1771747456, guid: f5687a90ebe968c4289051bdf3b38715, type: 3}
   description: Reduce Enemy Total Atk by 4.
   effectID: def_eclipse
-  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
+  lockedArt: {fileID: -146376206, guid: 40b3a200da62dea4b8d4d0fdc204b576, type: 3}

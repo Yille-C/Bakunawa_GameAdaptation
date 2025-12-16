@@ -3,10 +3,17 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Collections;
+using Photon.Pun;
+using Photon.Realtime;
 
-public class HandManager : MonoBehaviour
+public class HandManager : MonoBehaviourPunCallbacks
 {
     public static HandManager Instance;
+
+    [Header("Game Mode")]
+    public bool isMultiplayer = false;
+    [Tooltip("For MP Testing: How many players must lock in before battle starts?")]
+    public int playersNeededToStart = 2;
 
     [Header("Game Over UI")]
     public GameObject gameOverPanel;
@@ -78,6 +85,7 @@ public class HandManager : MonoBehaviour
     public Text energyText;
     public Text warningText;
     public int maxEnergy = 10;
+    public int currentEnergy;
 
     [Header("Areas")]
     public GameObject cardPrefab;
@@ -85,9 +93,14 @@ public class HandManager : MonoBehaviour
     [UnityEngine.Serialization.FormerlySerializedAs("lockedHandArea")]
     public Transform tribeSelectedPanel;
     public Transform tribeLockedPanel;
+    public Transform bakunawaLockedPanel;
     public Transform deckPileArea;
     public Transform battleZone;
     public Transform discardPileArea;
+
+    public Transform lockedArea;
+    public Transform centerStage;
+    public Text statusText;
 
     [Header("UI Controls")]
     public Button lockInButton;
@@ -96,21 +109,19 @@ public class HandManager : MonoBehaviour
 
     [Header("Settings")]
     public float playCardScale = 1.2f;
-    public float lockedScale = 0.6f; // Scale for cards in TribeLocked panel
+    public float lockedScale = 0.6f;
     public float discardScale = 0.8f;
     public float planningTime = 60f;
-    public float tribePanelSpacing = -90f; // Control spacing in the inspector
+    public float tribePanelSpacing = -90f;
     public float clashDuration = 0.5f;
 
     [Header("Details UI")]
     public GameObject detailsPanel;
     public Text detailName;
     public Text detailDesc;
-    // --- NEW DETAILS ---
     public Image detailImage;
     public Text detailCost;
     public Text detailAttack;
-    // -------------------
 
     [Header("Hand Pagination")]
     public int cardsPerPage = 5;
@@ -118,6 +129,14 @@ public class HandManager : MonoBehaviour
     public Button nextPageBtn;
     public Text pageIndicatorText;
     private int currentPage = 0;
+
+    [Header("Card Visuals")]
+    public Sprite tribesmenLockedCardBackSprite;
+    public Sprite bakunawaLockedCardBackSprite;
+    public GameObject tribesmenLockedCardBackPrefab;
+    public GameObject bakunawaLockedCardBackPrefab;
+
+
 
     [Header("Data")]
     public List<CardData> myDeck;
@@ -130,41 +149,53 @@ public class HandManager : MonoBehaviour
     private float currentTimer;
     private CardUI currentBattleSelection;
 
-    // GAME STATE
     public int roundNumber = 1;
     private bool playerGoesFirst = true;
     private bool enemyHasPlayedPendingCard = false;
     private CardUI pendingEnemyCard = null;
 
-    // FLAGS
     public bool alayBuffActive = false;
     public bool alayDebuffActive = false;
     public bool agongPlayedThisRound = false;
 
     private Image clashDimmer;
 
-    // ... [Existing Awake] ...
-    // Helper for animation timing
+    private string myRole;
+    private bool isTribesman = false;
+    private List<int> executionQueue = new List<int>();
+    private Dictionary<int, List<string>> pendingCardsMap = new Dictionary<int, List<string>>();
+    private int readyPlayersCount = 0;
+
+    private List<int> tribesmenTurnOrder = new List<int>();
+    private List<int> tribesmenLockInOrder = new List<int>();
+    private int bakunawaPlayerID = -1;
+    private int currentPlannerIndex = 0;
+    private int battleTurnIndex = 0;
+
+    private CardUI pendingTribesmanCard = null;
+    private CardUI pendingBakunawaCard = null;
+    private bool waitingForBakunawaCard = false;
+    private bool waitingForTribesmanCard = false;
+
+
+    Color notificationTribeColor = new Color(0.8f, 0.3f, 0.1f, 1f);
+    Color notificationBakunawaColor = new Color(0.1f, 0.5f, 1f, 1f);
+
     float shakingTimeNorm(float ct, float dur)
     {
         float t = ct / dur;
         return Mathf.Clamp01(t);
     }
-    
-    // --- TURN NOTIFICATIONS ---
-    Color notificationTribeColor = new Color(0.8f, 0.3f, 0.1f, 1f);
-    Color notificationBakunawaColor = new Color(0.1f, 0.5f, 1f, 1f);
 
-    IEnumerator ShowTurnNotificationRoutine(bool isPlayerTurn) 
+    IEnumerator ShowTurnNotificationRoutine(bool isPlayerTurn)
     {
         string text = isPlayerTurn ? "YOUR TURN" : "BAKUNAWA'S TURN";
         Color color = isPlayerTurn ? notificationTribeColor : notificationBakunawaColor;
-        
-        // Ensure TurnNotificationUI exists
+
         if (TurnNotificationUI.Instance == null)
         {
-             GameObject obj = new GameObject("TurnNotificationUI");
-             obj.AddComponent<TurnNotificationUI>();
+            GameObject obj = new GameObject("TurnNotificationUI");
+            obj.AddComponent<TurnNotificationUI>();
         }
 
         yield return StartCoroutine(TurnNotificationUI.Instance.PlayTurnNotification(text, color));
@@ -176,8 +207,8 @@ public class HandManager : MonoBehaviour
         EnsureDimmer();
         if (TurnNotificationUI.Instance == null)
         {
-             GameObject obj = new GameObject("TurnNotificationUI");
-             obj.AddComponent<TurnNotificationUI>();
+            GameObject obj = new GameObject("TurnNotificationUI");
+            obj.AddComponent<TurnNotificationUI>();
         }
     }
 
@@ -187,27 +218,23 @@ public class HandManager : MonoBehaviour
 
         Canvas rootCanvas = GetComponentInParent<Canvas>();
         if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
-        
+
         if (rootCanvas != null)
         {
             GameObject dimObj = new GameObject("ClashDimmer");
             dimObj.transform.SetParent(rootCanvas.transform, false);
-            dimObj.transform.SetAsFirstSibling(); // Put it behind most things
-            
+            dimObj.transform.SetAsFirstSibling();
+
             clashDimmer = dimObj.AddComponent<Image>();
-            clashDimmer.color = new Color(0, 0, 0, 0f); // Start transparent
+            clashDimmer.color = new Color(0, 0, 0, 0f);
             clashDimmer.raycastTarget = false;
-            
-            // Add Canvas with sorting order to control render layer
-            // Cards during clash have sortingOrder 2000, dimmer should be just below at 1999
+
             Canvas dimmerCanvas = dimObj.AddComponent<Canvas>();
             dimmerCanvas.overrideSorting = true;
             dimmerCanvas.sortingOrder = 1999;
-            
-            // GraphicRaycaster is needed for the Image to render properly with its own canvas
+
             dimObj.AddComponent<GraphicRaycaster>();
-            
-            // Stretch
+
             RectTransform rt = dimObj.GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
@@ -221,146 +248,74 @@ public class HandManager : MonoBehaviour
         if (clashDimmer == null) EnsureDimmer();
         if (clashDimmer == null) yield break;
 
-        // Dimmer uses sortingOrder 1999, cards use 2000 during clash
-        // Sibling order is kept as fallback but Canvas sorting order is primary
         if (fadeIn) clashDimmer.transform.SetAsLastSibling();
 
         float startAlpha = clashDimmer.color.a;
         float targetAlpha = fadeIn ? 0.75f : 0f;
         float elapsed = 0f;
 
-        while(elapsed < duration)
+        while (elapsed < duration)
         {
             float t = elapsed / duration;
             float a = Mathf.Lerp(startAlpha, targetAlpha, t);
-            clashDimmer.color = new Color(0,0,0, a);
+            clashDimmer.color = new Color(0, 0, 0, a);
             elapsed += Time.deltaTime;
             yield return null;
         }
-        clashDimmer.color = new Color(0,0,0, targetAlpha);
+        clashDimmer.color = new Color(0, 0, 0, targetAlpha);
     }
 
-    // [Enhanced] Multi-Phase Card Clash Animation - V2 (Root Canvas Detachment)
     IEnumerator AnimateCardClash(CardUI playerCard, CardUI enemyCard)
     {
-        // === PHASE 0: SETUP & DETACHMENT ===
-        // Dim the background
         StartCoroutine(FadeDimmer(true, 0.4f));
 
-        // 1. Capture Original Context
         Transform pOriginalParent = playerCard.transform.parent;
         Transform eOriginalParent = (enemyCard != null) ? enemyCard.transform.parent : null;
-        
-        // 2. Determine "Slot" Position in BattleZone (Where they should end up)
-        // We do this by temporarily parenting them to battleZone (if not already) and forcing a layout calc,
-        // OR we can just simple-math it if the layout is predictable.
-        // For reliability, let's assume specific "Left" and "Right" slots in the battle zone for visual clarity,
-        // or just let them return to the battleZone container at the end.
-        
-        // For the animations, we want to work in SCREEN SPACE / ROOT CANVAS SPACE to avoid layout fighting.
+
         Canvas rootCanvas = GetComponentInParent<Canvas>();
         if (rootCanvas != null && rootCanvas.rootCanvas != null) rootCanvas = rootCanvas.rootCanvas;
         Transform rootT = rootCanvas.transform;
 
-
-        // 3. Move to Root - This "frees" them from the LayoutGroup
-        playerCard.transform.SetParent(rootT, true); // worldPositionStays = true
+        playerCard.transform.SetParent(rootT, true);
         if (enemyCard != null) enemyCard.transform.SetParent(rootT, true);
 
-        // DISABLE UPDATE LOGIC & FORCE SORTING
         playerCard.enabled = false;
         if (enemyCard != null) enemyCard.enabled = false;
-        
-        // Get root canvas sorting layer for consistency
+
         string rootSortingLayer = rootCanvas.sortingLayerName;
-        
-        // Ensure Canvas exists and configure for high sorting order
-        Canvas pCanvas = playerCard.GetComponent<Canvas>();
-        if (pCanvas == null) pCanvas = playerCard.gameObject.AddComponent<Canvas>();
-        pCanvas.enabled = true;
-        pCanvas.overrideSorting = true;
-        pCanvas.sortingLayerName = rootSortingLayer; // Match root canvas sorting layer
-        pCanvas.sortingOrder = 2000;
-        
-        // Ensure GraphicRaycaster for proper rendering with Canvas
-        GraphicRaycaster pRaycaster = playerCard.GetComponent<GraphicRaycaster>();
-        if (pRaycaster == null) pRaycaster = playerCard.gameObject.AddComponent<GraphicRaycaster>();
-        
-        // Ensure Layer matches Root (in case Camera culls specific layers)
-        playerCard.gameObject.layer = rootT.gameObject.layer;
-        
-        // DEBUG: Log clash animation setup
-        Debug.Log($"[ClashAnim] Player card canvas: sortingOrder={pCanvas.sortingOrder}, sortingLayer={pCanvas.sortingLayerName}, enabled={pCanvas.enabled}");
 
-        if (enemyCard != null)
-        {
-             // Ensure Canvas exists and configure for high sorting order
-             Canvas eCanvas = enemyCard.GetComponent<Canvas>();
-             if (eCanvas == null) eCanvas = enemyCard.gameObject.AddComponent<Canvas>();
-             eCanvas.enabled = true;
-             eCanvas.overrideSorting = true;
-             eCanvas.sortingLayerName = rootSortingLayer; // Match root canvas sorting layer
-             eCanvas.sortingOrder = 2000;
-             
-             // Ensure GraphicRaycaster for proper rendering with Canvas
-             GraphicRaycaster eRaycaster = enemyCard.GetComponent<GraphicRaycaster>();
-             if (eRaycaster == null) eRaycaster = enemyCard.gameObject.AddComponent<GraphicRaycaster>();
-             
-             enemyCard.gameObject.layer = rootT.gameObject.layer;
-             
-             // DEBUG: Log enemy card setup
-             Debug.Log($"[ClashAnim] Enemy card canvas: sortingOrder={eCanvas.sortingOrder}, sortingLayer={eCanvas.sortingLayerName}, enabled={eCanvas.enabled}");
-        }
+        SetupCardCanvas(playerCard, rootSortingLayer);
+        if (enemyCard != null) SetupCardCanvas(enemyCard, rootSortingLayer);
 
-        // Ensure they render on top (Sibling index fallback)
         playerCard.transform.SetAsLastSibling();
         if (enemyCard != null) enemyCard.transform.SetAsLastSibling();
 
-        // Standardize Scale
         playerCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         if (enemyCard != null) enemyCard.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
 
-        // === LOCAL POSITION BASED ANIMATION (Works with Screen Space - Camera) ===
-        // After reparenting, capture local positions for animation
-        // Cards were reparented with worldPositionStays=true, so their local positions are now relative to root canvas
-        
-        RectTransform rootRect = rootCanvas.GetComponent<RectTransform>();
         Vector3 pStartLocalPos = playerCard.transform.localPosition;
         Vector3 eStartLocalPos = (enemyCard != null) ? enemyCard.transform.localPosition : Vector3.zero;
-        
-        // DEBUG: Log starting positions
-        Debug.Log($"[ClashAnim] Start positions - Player: {pStartLocalPos}, Enemy: {eStartLocalPos}");
-        Debug.Log($"[ClashAnim] Root canvas size: {rootRect.rect.size}, position: {rootRect.position}");
-        
-        // Clash point is center of canvas (local 0,0,0) - ensure Z stays at 0 for proper rendering
+
         Vector3 clashPointLocal = Vector3.zero;
-        
-        // Vertical offset in canvas units (these should match the canvas scale)
-        // For a 1920x1080 reference resolution, 350 is a reasonable offset
         float verticalOffset = 350f;
-        
-        // Ready positions (where cards wind up before lunging)
+
         Vector3 pReadyLocalPos = clashPointLocal + new Vector3(0, -verticalOffset, 0f);
         Vector3 eReadyLocalPos = clashPointLocal + new Vector3(0, verticalOffset, 0f);
         if (enemyCard == null) eReadyLocalPos = clashPointLocal;
-        
-        Debug.Log($"[ClashAnim] Ready positions - Player: {pReadyLocalPos}, Enemy: {eReadyLocalPos}");
 
-        // === PHASE 1: WINDUP / ALIGN (0.4s) ===
         float windupTime = 0.4f;
         float elapsed = 0f;
-        
+
         Quaternion pStartRot = playerCard.transform.localRotation;
         Quaternion eStartRot = (enemyCard != null) ? enemyCard.transform.localRotation : Quaternion.identity;
 
-        // Scale Up Logic
         Vector3 normalScale = new Vector3(playCardScale, playCardScale, playCardScale);
-        Vector3 clashScaleVec = normalScale * 1.3f; // 30% larger for impact
+        Vector3 clashScaleVec = normalScale * 1.3f;
 
         while (elapsed < windupTime)
         {
             float t = elapsed / windupTime;
-            t = t * t * (3f - 2f * t); // SmoothStep
+            t = t * t * (3f - 2f * t);
 
             playerCard.transform.localPosition = Vector3.Lerp(pStartLocalPos, pReadyLocalPos, t);
             playerCard.transform.localRotation = Quaternion.Lerp(pStartRot, Quaternion.identity, t);
@@ -379,46 +334,29 @@ public class HandManager : MonoBehaviour
         playerCard.transform.localScale = clashScaleVec;
         if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
 
-        // === PHASE 2: ANTICIPATION (0.15s) ===
-        // Brief pause/pull back before strike
         yield return new WaitForSeconds(0.1f);
-        
-        // === PHASE 3: LUNGE (0.15s) ===
-        // Smash together!
+
         float lungeTime = 0.15f;
         elapsed = 0f;
-        
-        // Remove Tilt as requested - keep them straight
-        Quaternion pTilt = Quaternion.identity; 
-        Quaternion eTilt = Quaternion.identity;
 
-        // Dynamic Height Calculation to prevent overlap
-        float actualHeight = 250f; // Default fallback
+        float actualHeight = 250f;
         RectTransform pRect = playerCard.GetComponent<RectTransform>();
         if (pRect != null) actualHeight = pRect.rect.height * clashScaleVec.y;
 
         float cardHalfHeight = actualHeight / 2f;
-        
-        float collisionGap = 0f; 
-        float offset = cardHalfHeight + collisionGap;
+        float offset = cardHalfHeight;
 
-        // Impact positions in LOCAL space
         Vector3 pImpactLocalPos = clashPointLocal + new Vector3(0, -offset, 0f);
         Vector3 eImpactLocalPos = clashPointLocal + new Vector3(0, offset, 0f);
 
-        // STRETCH VECTORS (Elongate on Y, thin on X)
-        // Apply relative to the current clashScaleVec
         Vector3 stretchScale = new Vector3(clashScaleVec.x * 0.8f, clashScaleVec.y * 1.2f, clashScaleVec.z);
 
         while (elapsed < lungeTime)
         {
             float t = elapsed / lungeTime;
-            t = t * t * t; // Cubic Ease In (Exciting!)
+            t = t * t * t;
 
             playerCard.transform.localPosition = Vector3.Lerp(pReadyLocalPos, pImpactLocalPos, t);
-            
-            // Apply STRETCH as velocity increases
-            // Max stretch at t=1
             playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, stretchScale, t);
 
             if (enemyCard != null)
@@ -430,249 +368,91 @@ public class HandManager : MonoBehaviour
             yield return null;
         }
 
-        // Snap to final collision position
         playerCard.transform.localPosition = pImpactLocalPos;
         if (enemyCard != null) enemyCard.transform.localPosition = eImpactLocalPos;
 
-        // === PHASE 4: IMPACT (One Frame + Shake) ===
-        // Visuals
         playerCard.SetBroken(true);
         if (enemyCard != null) enemyCard.SetBroken(true);
 
-        // Screen Shake & IMPACT PUNCH
-        Vector3 camOriginalPos = Camera.main.transform.position;
-        float shakeDuration = 0.25f; // Slightly longer
-        float shakeMagnitude = 15f; // Impactful jitter
-        float shakeTimer = 0f;
-        
-        // SPAWN SPARKS - use midpoint for particle effects
-        Vector3 sparkPos = rootT.position; // Default to center
-        if (enemyCard != null)
-        {
-            sparkPos = Vector3.Lerp(playerCard.transform.position, enemyCard.transform.position, 0.5f);
-        }
+        Vector3 sparkPos = rootT.position;
+        if (enemyCard != null) sparkPos = Vector3.Lerp(playerCard.transform.position, enemyCard.transform.position, 0.5f);
         CreateImpactSparks(sparkPos);
 
-        // Start Recoil concurrently with shake - use LOCAL positions
         float recoilTime = 0.3f;
+        float shakeTimer = 0f;
         Vector3 pRecoilLocalPos = pImpactLocalPos + new Vector3(0, -50f, 0);
         Vector3 eRecoilLocalPos = eImpactLocalPos + new Vector3(0, 50f, 0);
 
-        // SQUASH TARGET (Flatten on Y, widen on X)
-        // This replaces the simple scale punch. We squash HARD then spring back.
-        Vector3 squashScale = new Vector3(clashScaleVec.x * 1.3f, clashScaleVec.y * 0.7f, clashScaleVec.z);
-        Vector3 overshootScale = new Vector3(clashScaleVec.x * 0.9f, clashScaleVec.y * 1.1f, clashScaleVec.z); // Spring effect
-
-        while (shakeTimer < recoilTime) // Loop for length of recoil
+        while (shakeTimer < recoilTime)
         {
             float t = shakeTimer / recoilTime;
-            t = Mathf.Sin(t * Mathf.PI * 0.5f); // Ease Out Recoil
+            t = Mathf.Sin(t * Mathf.PI * 0.5f);
 
-            // Base Recoil Position (LOCAL)
             Vector3 currentRecoilP = Vector3.Lerp(pImpactLocalPos, pRecoilLocalPos, t);
             Vector3 currentRecoilE = Vector3.Lerp(eImpactLocalPos, eRecoilLocalPos, t);
 
-            // ADD VIOLENT SHAKE (Jitter)
-            if (shakeTimer < shakeDuration)
+            if (shakeTimer < 0.25f)
             {
-               float strength = 1f - (shakeTimer / shakeDuration);
-               Vector3 cardJitter = (Vector3)(Random.insideUnitCircle * shakeMagnitude * strength);
-               
-               playerCard.transform.localPosition = currentRecoilP + cardJitter;
-               if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE + cardJitter;
+                float strength = 1f - (shakeTimer / 0.25f);
+                Vector3 cardJitter = (Vector3)(Random.insideUnitCircle * 15f * strength);
 
-               // SQUASH AND STRETCH DECAY LOGIC
-               // 0.0 -> 0.1 : Squash
-               // 0.1 -> 0.3 : Overshoot (Stretch)
-               // 0.3 -> 1.0 : Return to Normal
-               
-               float scalePhase = shakingTimeNorm(shakeTimer, 0.25f); // localized t
-               Vector3 currentScale = clashScaleVec;
-
-               if (scalePhase < 0.3f)
-               {
-                   currentScale = Vector3.Lerp(squashScale, overshootScale, scalePhase / 0.3f);
-               }
-               else
-               {
-                   currentScale = Vector3.Lerp(overshootScale, clashScaleVec, (scalePhase - 0.3f) / 0.7f);
-               }
-
-               playerCard.transform.localScale = currentScale;
-               if (enemyCard != null) enemyCard.transform.localScale = currentScale;
+                playerCard.transform.localPosition = currentRecoilP + cardJitter;
+                if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE + cardJitter;
             }
-            else 
+            else
             {
-               playerCard.transform.localPosition = currentRecoilP;
-               if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE;
-               
-               playerCard.transform.localScale = clashScaleVec;
-               if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
+                playerCard.transform.localPosition = currentRecoilP;
+                if (enemyCard != null) enemyCard.transform.localPosition = currentRecoilE;
             }
+            playerCard.transform.localScale = clashScaleVec;
+            if (enemyCard != null) enemyCard.transform.localScale = clashScaleVec;
 
             shakeTimer += Time.deltaTime;
             yield return null;
         }
-        Camera.main.transform.position = camOriginalPos; // Ensure reset
 
-        // === PHASE 5: RETURN TO BOARD (0.4s) ===
-        // Undim background
         StartCoroutine(FadeDimmer(false, 0.4f));
 
-        // Return cards to their specific zones (Player Zone / Enemy Zone)
-        
         if (pOriginalParent != null) playerCard.transform.SetParent(pOriginalParent, true);
-        else playerCard.transform.SetParent(battleZone, true); // Fallback
+        else playerCard.transform.SetParent(battleZone, true);
 
         if (enemyCard != null)
         {
             if (eOriginalParent != null) enemyCard.transform.SetParent(eOriginalParent, true);
-            else enemyCard.transform.SetParent(battleZone, true); // Fallback
+            else enemyCard.transform.SetParent(battleZone, true);
         }
 
-        // We need to know where the LayoutGroup *validly* wants them.
-        
-        LayoutElement pLe = playerCard.GetComponent<LayoutElement>();
-        if (pLe == null) pLe = playerCard.gameObject.AddComponent<LayoutElement>();
-        
-        LayoutElement eLe = (enemyCard != null) ? enemyCard.GetComponent<LayoutElement>() : null;
+        CleanupCardCanvas(playerCard);
+        if (enemyCard != null) CleanupCardCanvas(enemyCard);
 
-        // Enable layout momentarily to calculate slot
-        pLe.ignoreLayout = false;
-        if (eLe != null) eLe.ignoreLayout = false;
-        
-        // Force Rebuild on correct parents
-        if (playerCard.transform.parent != null) 
+        playerCard.enabled = true;
+        if (enemyCard != null) enemyCard.enabled = true;
+
+        if (playerCard.transform.parent != null)
             LayoutRebuilder.ForceRebuildLayoutImmediate(playerCard.transform.parent as RectTransform);
-            
-        if (enemyCard != null && enemyCard.transform.parent != null && enemyCard.transform.parent != playerCard.transform.parent)
-             LayoutRebuilder.ForceRebuildLayoutImmediate(enemyCard.transform.parent as RectTransform);
-        
-        // Capture Target Positions
-        Vector3 pFinalPos = playerCard.transform.position;
-        Vector3 eFinalPos = (enemyCard != null) ? enemyCard.transform.position : Vector3.zero;
+    }
 
-        // Reset to Recoil pos to start return flight (use LOCAL positions)
-        // Requires disabling layout again so we can move them freely
-        pLe.ignoreLayout = true;
-        if (eLe != null) eLe.ignoreLayout = true;
-        
-        playerCard.transform.localPosition = pRecoilLocalPos;
-        if (enemyCard != null) enemyCard.transform.localPosition = eRecoilLocalPos;
-        
-        // === ANIMATE TO PILE ===
-        // Skip the old "return to board" logic - go directly to pile animation
-        // Instead of relying on HorizontalLayoutGroup (which causes overflow),
-        // we manually stack clashed cards on the LEFT/RIGHT side of each zone.
-        
-        // PLAYER CARD PILE - Calculate target
-        pLe.ignoreLayout = true;
-        int playerPileIndex = 0;
-        Transform pZone = pOriginalParent != null ? pOriginalParent : battleZone;
-        foreach(Transform child in pZone)
-        {
-            if (child == playerCard.transform) break;
-            CardUI otherCard = child.GetComponent<CardUI>();
-            if (otherCard != null && !otherCard.isEnemy) playerPileIndex++;
-        }
+    void SetupCardCanvas(CardUI card, string sortLayer)
+    {
+        Canvas c = card.GetComponent<Canvas>();
+        if (c == null) c = card.gameObject.AddComponent<Canvas>();
+        c.enabled = true;
+        c.overrideSorting = true;
+        c.sortingLayerName = sortLayer;
+        c.sortingOrder = 2000;
 
-        RectTransform pZoneRect = pZone as RectTransform;
-        float pileOffsetX = 30f;
-        float pPileBaseX = -pZoneRect.rect.width / 2f + 100f;
-        Vector3 pPileTargetLocal = new Vector3(pPileBaseX + playerPileIndex * pileOffsetX, 0, 0);
-        Quaternion pPileTargetRot = Quaternion.Euler(0, 0, Random.Range(-3f, 3f));
-        
-        // ENEMY CARD PILE - Calculate target
-        Vector3 ePileTargetLocal = Vector3.zero;
-        Quaternion ePileTargetRot = Quaternion.identity;
-        Transform eZone = null;
-        
-        if (enemyCard != null)
-        {
-            eLe.ignoreLayout = true;
-            int enemyPileIndex = 0;
-            eZone = eOriginalParent != null ? eOriginalParent : battleZone;
-            foreach(Transform child in eZone)
-            {
-                if (child == enemyCard.transform) break;
-                CardUI otherCard = child.GetComponent<CardUI>();
-                if (otherCard != null && otherCard.isEnemy) enemyPileIndex++;
-            }
+        if (card.GetComponent<GraphicRaycaster>() == null) card.gameObject.AddComponent<GraphicRaycaster>();
+    }
 
-            RectTransform eZoneRect = eZone as RectTransform;
-            float ePileBaseX = eZoneRect.rect.width / 2f - 100f;
-            ePileTargetLocal = new Vector3(ePileBaseX - enemyPileIndex * pileOffsetX, 0, 0);
-            ePileTargetRot = Quaternion.Euler(0, 0, Random.Range(-3f, 3f));
-        }
-
-        // Reparent NOW (to prepare for local position animation)
-        playerCard.transform.SetParent(pZone, true); // Keep world position
-        playerCard.transform.SetAsLastSibling();
-        Vector3 pPileStartLocal = playerCard.transform.localPosition;
-        Quaternion pPileStartRot = playerCard.transform.localRotation;
-        
-        Vector3 ePileStartLocal = Vector3.zero;
-        Quaternion ePileStartRot = Quaternion.identity;
-        if (enemyCard != null)
-        {
-            enemyCard.transform.SetParent(eZone, true);
-            enemyCard.transform.SetAsLastSibling();
-            ePileStartLocal = enemyCard.transform.localPosition;
-            ePileStartRot = enemyCard.transform.localRotation;
-        }
-
-        // === ANIMATE TO PILE (0.35s) ===
-        float pileTime = 0.35f;
-        elapsed = 0f;
-        while(elapsed < pileTime)
-        {
-            float t = elapsed / pileTime;
-            t = t * t * (3f - 2f * t); // SmoothStep
-            
-            playerCard.transform.localPosition = Vector3.Lerp(pPileStartLocal, pPileTargetLocal, t);
-            playerCard.transform.localRotation = Quaternion.Lerp(pPileStartRot, pPileTargetRot, t);
-            playerCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
-            
-            if (enemyCard != null)
-            {
-                enemyCard.transform.localPosition = Vector3.Lerp(ePileStartLocal, ePileTargetLocal, t);
-                enemyCard.transform.localRotation = Quaternion.Lerp(ePileStartRot, ePileTargetRot, t);
-                enemyCard.transform.localScale = Vector3.Lerp(clashScaleVec, normalScale, t);
-            }
-            
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-        
-        // Final snap
-        playerCard.transform.localPosition = pPileTargetLocal;
-        playerCard.transform.localRotation = pPileTargetRot;
-        playerCard.transform.localScale = normalScale;
-        
-        // RESET SORTING ORDER
-        // Important: Reset sorting so cards don't appear over result banners
-        Canvas pCanvasInfo = playerCard.GetComponent<Canvas>();
-        if (pCanvasInfo != null) pCanvasInfo.overrideSorting = false;
-        playerCard.enabled = true; // Re-enable update logic
-        
-        if (enemyCard != null)
-        {
-            enemyCard.transform.localPosition = ePileTargetLocal;
-            enemyCard.transform.localRotation = ePileTargetRot;
-            enemyCard.transform.localScale = normalScale;
-            
-            Canvas eCanvasInfo = enemyCard.GetComponent<Canvas>();
-            if (eCanvasInfo != null) eCanvasInfo.overrideSorting = false;
-            enemyCard.enabled = true;
-        }
+    void CleanupCardCanvas(CardUI card)
+    {
+        Canvas c = card.GetComponent<Canvas>();
+        if (c != null) c.overrideSorting = false;
     }
 
     void Start()
     {
-        // Override Inspector value to ensure correct spacing
         tribePanelSpacing = -90f;
-
-        // UI Cleanup
         detailsPanel.SetActive(false);
         if (warningText != null) warningText.gameObject.SetActive(false);
         if (combatBanner != null) combatBanner.SetActive(false);
@@ -685,26 +465,23 @@ public class HandManager : MonoBehaviour
         if (discardNotifyPanel != null) discardNotifyPanel.SetActive(false);
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
 
-        // Button Listeners
         lockInButton.onClick.AddListener(OnLockInPressed);
         playCardButton.onClick.AddListener(OnPlayButtonPressed);
 
         if (rollButton != null) rollButton.onClick.AddListener(OnRollDicePressed);
         if (goFirstButton != null) goFirstButton.onClick.AddListener(() => FinalizeTurnOrder(true));
         if (goSecondButton != null) goSecondButton.onClick.AddListener(() => FinalizeTurnOrder(false));
-
         if (alayBuffButton != null) alayBuffButton.onClick.AddListener(() => ResolveAlayChoice(true));
         if (alayDebuffButton != null) alayDebuffButton.onClick.AddListener(() => ResolveAlayChoice(false));
-
         if (restartButton != null) restartButton.onClick.AddListener(RestartGame);
         if (mainMenuButton != null) mainMenuButton.onClick.AddListener(GoToMainMenu);
 
-        if (prevPageBtn != null) 
+        if (prevPageBtn != null)
         {
             prevPageBtn.onClick.AddListener(PrevHandPage);
             EnsureButtonAnimation(prevPageBtn);
         }
-        if (nextPageBtn != null) 
+        if (nextPageBtn != null)
         {
             nextPageBtn.onClick.AddListener(NextHandPage);
             EnsureButtonAnimation(nextPageBtn);
@@ -712,56 +489,162 @@ public class HandManager : MonoBehaviour
 
         lockInButton.gameObject.SetActive(true);
         playCardButton.gameObject.SetActive(false);
-
         roundNumber = 1;
         UpdateRoundUI();
+        SetupLayoutGroups();
 
-        if (tribeSelectedPanel != null)
+        currentEnergy = maxEnergy;
+
+        if (PhotonNetwork.IsConnected && PhotonNetwork.InRoom)
         {
-            HorizontalLayoutGroup hlg = tribeSelectedPanel.GetComponent<HorizontalLayoutGroup>();
-            if (hlg == null) hlg = tribeSelectedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
-            
-            // Always apply settings to ensure spacing is correct
-            hlg.childAlignment = TextAnchor.MiddleCenter;
-            hlg.childControlWidth = false;
-            hlg.childControlHeight = false;
-            hlg.childForceExpandWidth = false;
-            hlg.childForceExpandHeight = false;
-            hlg.spacing = tribePanelSpacing; 
+            isMultiplayer = true;
+            SetupMultiplayer();
         }
-
-        if (tribeLockedPanel != null)
+        else
         {
-            HorizontalLayoutGroup hlg = tribeLockedPanel.GetComponent<HorizontalLayoutGroup>();
-            if (hlg == null) hlg = tribeLockedPanel.gameObject.AddComponent<HorizontalLayoutGroup>();
-            
-            hlg.childAlignment = TextAnchor.MiddleCenter;
-            hlg.childControlWidth = false;
-            hlg.childControlHeight = false;
-            hlg.childForceExpandWidth = false;
-            hlg.childForceExpandHeight = false;
-            hlg.spacing = tribePanelSpacing; 
+            isMultiplayer = false;
+            SetupSinglePlayer();
         }
+    }
 
+    void SetupLayoutGroups()
+    {
+        if (tribeSelectedPanel != null) EnsureHorizontalLayout(tribeSelectedPanel);
+        if (tribeLockedPanel != null) EnsureHorizontalLayout(tribeLockedPanel);
         if (battleZone != null)
         {
             HorizontalLayoutGroup hlg = battleZone.GetComponent<HorizontalLayoutGroup>();
             if (hlg == null) hlg = battleZone.gameObject.AddComponent<HorizontalLayoutGroup>();
-            
             hlg.childAlignment = TextAnchor.MiddleLeft;
-            hlg.childControlWidth = false;
-            hlg.childControlHeight = false;
-            hlg.childForceExpandWidth = false;
-            hlg.childForceExpandHeight = false;
+            hlg.childControlWidth = false; hlg.childControlHeight = false;
+            hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
             hlg.padding = new RectOffset(50, 0, 0, 0);
-            hlg.spacing = 20; // Nice gap for played cards
+            hlg.spacing = 20;
         }
+    }
 
+    void EnsureHorizontalLayout(Transform t)
+    {
+        HorizontalLayoutGroup hlg = t.GetComponent<HorizontalLayoutGroup>();
+        if (hlg == null) hlg = t.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.childAlignment = TextAnchor.MiddleCenter;
+        hlg.childControlWidth = false; hlg.childControlHeight = false;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+        hlg.spacing = tribePanelSpacing;
+    }
+
+    void SetupSinglePlayer()
+    {
+        Debug.Log("Starting Single Player Mode...");
         SpawnDeck();
         StartCoroutine(StartPlanningPhaseSequence());
     }
 
-    void Update()
+    void SetupMultiplayer()
+    {
+        Debug.Log("Starting Multiplayer Mode...");
+
+        if (handArea == null) { Debug.LogError("HandArea is NULL!"); return; }
+
+        if (PhotonNetwork.LocalPlayer.CustomProperties.ContainsKey("Role"))
+            myRole = (string)PhotonNetwork.LocalPlayer.CustomProperties["Role"];
+        else
+            myRole = "Mandirigma";
+
+        if (myRole == "Spectator") myRole = "Mandirigma";
+
+        if (myRole == "Tank") myRole = "Tagapangalaga";
+        if (myRole == "Attacker") myRole = "Mandirigma";
+        if (myRole == "Support") myRole = "Albularyo";
+
+        if (statusText) statusText.text = "Role: " + myRole;
+
+        if (myRole == "Bakunawa") isTribesman = false;
+        else isTribesman = true;
+
+        tribesmenTurnOrder.Clear();
+        bakunawaPlayerID = -1;
+
+        foreach (Player p in PhotonNetwork.PlayerList)
+        {
+            string pRole = p.CustomProperties.ContainsKey("Role") ? (string)p.CustomProperties["Role"] : "Spectator";
+
+            if (pRole == "Bakunawa")
+            {
+                bakunawaPlayerID = p.ActorNumber;
+            }
+            else if (pRole != "Spectator")
+            {
+                tribesmenTurnOrder.Add(p.ActorNumber);
+            }
+        }
+        tribesmenTurnOrder.Sort();
+
+        if (tribesmenTurnOrder.Count == 0 && isTribesman)
+            tribesmenTurnOrder.Add(PhotonNetwork.LocalPlayer.ActorNumber);
+
+        foreach (Transform child in handArea) Destroy(child.gameObject);
+
+        if (DeckManager.Instance != null)
+        {
+            List<CardData> roleDeck = DeckManager.Instance.GetDeckByRole(myRole);
+            if (roleDeck != null && roleDeck.Count > 0)
+            {
+                foreach (CardData data in roleDeck)
+                {
+                    if (data == null) continue;
+                    GameObject cardObj = Instantiate(cardPrefab, handArea);
+                    CardUI ui = cardObj.GetComponent<CardUI>();
+                    if (ui) ui.Setup(data);
+
+                    CardDisplay display = cardObj.GetComponent<CardDisplay>();
+                    if (display != null) { display.cardData = data; display.currentAttack = data.attackValue; }
+                }
+            }
+        }
+        UpdateHandPagination();
+
+        StartCoroutine(StartPlanningPhaseSequenceMP(true));
+    }
+
+    IEnumerator StartPlanningPhaseSequenceMP(bool isMyTurn)
+    {
+        inputLocked = true;
+        isPlanningPhase = true;
+        currentTimer = planningTime;
+        SetEnergyUIActive(false);
+
+        if (planningBanner != null)
+        {
+            planningBanner.SetActive(true);
+            yield return new WaitForSeconds(1.5f);
+            planningBanner.SetActive(false);
+        }
+        else yield return new WaitForSeconds(0.5f);
+
+        SetEnergyUIActive(true);
+        UpdateEnergyUI();
+        UpdateHandPagination();
+
+        inputLocked = false;
+        if (lockInButton) lockInButton.interactable = true;
+
+        if (isTribesman)
+        {
+            if (statusText) statusText.text = "PLANNING PHASE: Select cards and Lock In!";
+        }
+        else
+        {
+            if (statusText) statusText.text = "BAKUNAWA'S PLANNING: Select cards and Lock In!";
+        }
+
+        if (timerText) timerText.color = Color.white;
+    }
+
+    [PunRPC]
+
+
+void Update()
     {
         if (isGameOver) return;
 
@@ -793,13 +676,11 @@ public class HandManager : MonoBehaviour
         if (roundCounterText != null) roundCounterText.text = roundNumber.ToString();
     }
 
-    // --- DETAILS PANEL LOGIC ---
     public void ShowCardDetails(CardData data)
     {
         detailsPanel.SetActive(true);
         if (detailName != null) detailName.text = data.cardName;
         if (detailDesc != null) detailDesc.text = data.description;
-
         if (detailImage != null && data.cardArt != null) detailImage.sprite = data.cardArt;
         if (detailCost != null) detailCost.text = data.energyCost.ToString();
         if (detailAttack != null) detailAttack.text = data.attackValue.ToString();
@@ -809,9 +690,7 @@ public class HandManager : MonoBehaviour
     {
         detailsPanel.SetActive(false);
     }
-    // ---------------------------
 
-    // --- GAME OVER LOGIC ---
     public void TriggerGameOver(string winner)
     {
         if (isGameOver) return;
@@ -850,15 +729,16 @@ public class HandManager : MonoBehaviour
 
     void RestartGame()
     {
+        if (PhotonNetwork.IsConnected) PhotonNetwork.Disconnect();
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     void GoToMainMenu()
     {
+        if (PhotonNetwork.IsConnected) PhotonNetwork.Disconnect();
         SceneManager.LoadScene("MainMenu");
     }
 
-    // --- ALAY CHOICE LOGIC ---
     IEnumerator ShowAlayChoice()
     {
         if (alayChoicePanel != null)
@@ -879,27 +759,39 @@ public class HandManager : MonoBehaviour
 
     public void SelectCardForBattle(CardUI card)
     {
-        if (inputLocked || (playCardButton != null && !playCardButton.interactable)) return;
+        if (inputLocked || !isMultiplayer) return;
+
+        if (playCardButton != null && !playCardButton.interactable) return;
 
         if (currentBattleSelection != null)
         {
-            // Disable glow on previously selected card
             if (currentBattleSelection.glowOverlay != null)
                 currentBattleSelection.glowOverlay.SetGlowEnabled(false);
-            // Also hide legacy border just in case
             if (currentBattleSelection.selectionBorder != null)
                 currentBattleSelection.selectionBorder.SetActive(false);
         }
+
         currentBattleSelection = card;
-        // Enable glow on newly selected card
+
         if (currentBattleSelection.glowOverlay != null)
         {
             currentBattleSelection.glowOverlay.SetGlowEnabled(true);
         }
+        if (currentBattleSelection.selectionBorder != null)
+        {
+            currentBattleSelection.selectionBorder.SetActive(true);
+        }
     }
+
 
     void OnPlayButtonPressed()
     {
+        if (isMultiplayer)
+        {
+            if (currentBattleSelection != null) TryPlayCard(currentBattleSelection);
+            return;
+        }
+
         if (currentBattleSelection == null) return;
         StartCoroutine(PlayPlayerCardSequence(currentBattleSelection));
     }
@@ -907,7 +799,7 @@ public class HandManager : MonoBehaviour
     IEnumerator PlayPlayerCardSequence(CardUI cardToPlay)
     {
         playCardButton.interactable = false;
-        inputLocked = true; // Lock immediately
+        inputLocked = true;
 
         CardDisplay display = cardToPlay.GetComponent<CardDisplay>();
         if (display != null && display.cardData != null && display.cardData.effectID == "sup_alay")
@@ -923,14 +815,13 @@ public class HandManager : MonoBehaviour
         cardToPlay.transform.SetParent(battleZone);
         cardToPlay.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
         cardToPlay.transform.localRotation = Quaternion.identity;
-        
-        // Position card at CENTER of battle zone (not piled yet)
+
         LayoutElement le = cardToPlay.GetComponent<LayoutElement>();
         if (le == null) le = cardToPlay.gameObject.AddComponent<LayoutElement>();
         le.ignoreLayout = true;
-        cardToPlay.transform.localPosition = Vector3.zero; // Center
+        cardToPlay.transform.localPosition = Vector3.zero;
         cardToPlay.SetLockedState(false);
-        // Disable glow when card is played
+
         if (cardToPlay.glowOverlay != null) cardToPlay.glowOverlay.SetGlowEnabledImmediate(false);
         if (cardToPlay.selectionBorder != null) cardToPlay.selectionBorder.SetActive(false);
 
@@ -1011,9 +902,8 @@ public class HandManager : MonoBehaviour
 
     IEnumerator EndRoundSequence()
     {
-        // Clear turn indicators at round end
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.ClearTurnIndicators();
-        
+
         int pScore = 0;
         int bScore = 0;
         bool playerLost = false;
@@ -1032,65 +922,6 @@ public class HandManager : MonoBehaviour
         if (playerLost && agongPlayedThisRound)
         {
             yield return StartCoroutine(ShowAgongRetrieval());
-        }
-
-        if (bakunawaWon)
-        {
-            bool lunarActive = false;
-            bool tidalActive = false;
-            int bakunawaCardCount = 0;
-
-            foreach (Transform t in battleZone)
-            {
-                CardUI c = t.GetComponent<CardUI>();
-                if (c != null && c.isEnemy)
-                {
-                    bakunawaCardCount++;
-                    CardDisplay d = c.GetComponent<CardDisplay>();
-                    if (d != null && d.cardData != null)
-                    {
-                        if (d.cardData.effectID == "atk_lunar") lunarActive = true;
-                        if (d.cardData.effectID == "sup_tidal") tidalActive = true;
-                    }
-                }
-            }
-
-            if (lunarActive && bakunawaCardCount == 1)
-            {
-                if (ScoreManager.Instance != null) ScoreManager.Instance.UpdateTowerScore(1);
-            }
-
-            if (tidalActive)
-            {
-                yield return StartCoroutine(DiscardPlayerCardSequence("Tidal Pull"));
-            }
-        }
-
-        int bakuRuntimeCount = 0;
-        if (BakunawaAI.Instance != null)
-        {
-            bakuRuntimeCount += BakunawaAI.Instance.deckPileArea.childCount;
-            bakuRuntimeCount += BakunawaAI.Instance.handArea.childCount;
-        }
-
-        if (bakuRuntimeCount <= 5)
-        {
-            bool draconicPlayed = false;
-            foreach (Transform t in battleZone)
-            {
-                CardUI c = t.GetComponent<CardUI>();
-                if (c != null && c.isEnemy)
-                {
-                    CardDisplay d = c.GetComponent<CardDisplay>();
-                    if (d != null && d.cardData != null && d.cardData.effectID == "sup_draconic")
-                        draconicPlayed = true;
-                }
-            }
-
-            if (draconicPlayed)
-            {
-                yield return StartCoroutine(DiscardPlayerCardSequence("Draconic Patience"));
-            }
         }
 
         yield return new WaitForSeconds(1.0f);
@@ -1115,7 +946,6 @@ public class HandManager : MonoBehaviour
         alayDebuffActive = false;
         agongPlayedThisRound = false;
 
-        // Clear turn indicators during planning phase
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.ClearTurnIndicators();
 
         if (planningBanner != null)
@@ -1164,13 +994,25 @@ public class HandManager : MonoBehaviour
         int currentUsed = 0;
         foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card);
 
-        if (currentUsed > maxEnergy)
+        if (currentUsed > currentEnergy)
         {
             Debug.Log("Cannot Lock In: Not Enough Energy!");
             StartCoroutine(ShowWarningSequence());
             return;
         }
 
+        if (isMultiplayer)
+        {
+            MultiplayerLockIn(selectedCardsUI, currentUsed);
+        }
+        else
+        {
+            SinglePlayerLockIn();
+        }
+    }
+
+    void SinglePlayerLockIn()
+    {
         isPlanningPhase = false;
         inputLocked = true;
         lockInButton.gameObject.SetActive(false);
@@ -1185,7 +1027,6 @@ public class HandManager : MonoBehaviour
                 agongPlayedThisRound = true;
 
             card.transform.SetParent(tribeLockedPanel);
-            // Disable glow when card is locked in
             if (card.glowOverlay != null) card.glowOverlay.SetGlowEnabledImmediate(false);
             if (card.selectionBorder != null) card.selectionBorder.SetActive(false);
             card.SetLockedState(true);
@@ -1202,16 +1043,802 @@ public class HandManager : MonoBehaviour
             {
                 card.transform.SetParent(deckPileArea);
                 card.transform.localPosition = Vector3.zero;
-                card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f));
                 card.SwitchToDeckMode(false);
             }
         }
         selectedCardsUI.Clear();
 
         if (BakunawaAI.Instance != null) BakunawaAI.Instance.LockInPlan();
-
         StartDicePhase();
     }
+
+    void MultiplayerLockIn(List<CardUI> selectedCards, int totalCost)
+    {
+        currentEnergy -= totalCost;
+
+        isPlanningPhase = false;
+        inputLocked = true;
+        if (lockInButton) lockInButton.interactable = false;
+        if (statusText) statusText.text = "Waiting for others...";
+
+        List<string> cardNames = new List<string>();
+        if (selectedCards == null) selectedCards = new List<CardUI>();
+
+        foreach (CardUI c in selectedCards)
+        {
+            if (c != null)
+            {
+                CardDisplay cd = c.GetComponent<CardDisplay>();
+                if (cd != null && cd.cardData != null) cardNames.Add(cd.cardData.cardName);
+            }
+        }
+
+        if (photonView)
+            photonView.RPC("RPC_PlayerLockedIn", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, cardNames.ToArray(), totalCost, isTribesman);
+
+        Transform targetPanel = isTribesman ? tribeLockedPanel : bakunawaLockedPanel;
+
+        foreach (CardUI c in selectedCards)
+        {
+            if (c != null)
+            {
+                c.transform.SetParent(targetPanel);
+                c.SetLockedState(true);
+            }
+        }
+
+        if (targetPanel != null)
+        {
+            UpdateContainerSpacing(targetPanel as RectTransform);
+        }
+
+        List<Transform> remainingCards = new List<Transform>();
+        foreach (Transform child in handArea) remainingCards.Add(child);
+        foreach (Transform child in remainingCards) { if (child) child.gameObject.SetActive(false); }
+
+        selectedCardsUI.Clear();
+        UpdateEnergyUI();
+    }
+
+
+
+
+    [PunRPC]
+    void RPC_PlayerLockedIn(int actorNumber, string[] cardNames, int cost, bool isTribesmanPlayer)
+    {
+        if (!executionQueue.Contains(actorNumber)) executionQueue.Add(actorNumber);
+        if (!pendingCardsMap.ContainsKey(actorNumber)) pendingCardsMap[actorNumber] = new List<string>();
+        pendingCardsMap[actorNumber].AddRange(cardNames);
+
+        if (isTribesmanPlayer && !tribesmenLockInOrder.Contains(actorNumber))
+        {
+            tribesmenLockInOrder.Add(actorNumber);
+        }
+
+        if (this.isTribesman && isTribesmanPlayer)
+        {
+            if (actorNumber != PhotonNetwork.LocalPlayer.ActorNumber)
+            {
+                currentEnergy -= cost;
+                UpdateEnergyUI();
+            }
+        }
+
+        if (actorNumber != PhotonNetwork.LocalPlayer.ActorNumber)
+        {
+            Transform targetLockedArea = null;
+            bool isOpposingTeam = (this.isTribesman != isTribesmanPlayer);
+
+            if (isTribesmanPlayer)
+            {
+                targetLockedArea = tribeLockedPanel;
+            }
+            else
+            {
+                targetLockedArea = bakunawaLockedPanel;
+            }
+
+            if (targetLockedArea != null)
+            {
+                foreach (string s in cardNames)
+                {
+                    GameObject lockedObj = null;
+
+                    if (isOpposingTeam)
+                    {
+                        GameObject cardBackPrefab = isTribesmanPlayer ? tribesmenLockedCardBackPrefab : bakunawaLockedCardBackPrefab;
+                        Sprite cardBackSprite = isTribesmanPlayer ? tribesmenLockedCardBackSprite : bakunawaLockedCardBackSprite;
+
+                        if (cardBackPrefab != null)
+                        {
+                            lockedObj = Instantiate(cardBackPrefab, targetLockedArea);
+                        }
+                        else
+                        {
+                            lockedObj = Instantiate(cardPrefab, targetLockedArea);
+
+                            Image cardImage = lockedObj.GetComponent<Image>();
+                            if (cardImage != null && cardBackSprite != null)
+                            {
+                                cardImage.sprite = cardBackSprite;
+                            }
+
+                            foreach (Transform child in lockedObj.transform)
+                            {
+                                child.gameObject.SetActive(false);
+                            }
+
+                            Text[] texts = lockedObj.GetComponentsInChildren<Text>(true);
+                            foreach (Text t in texts) t.gameObject.SetActive(false);
+
+                            Image[] images = lockedObj.GetComponentsInChildren<Image>(true);
+                            foreach (Image img in images)
+                            {
+                                if (img.gameObject != lockedObj) img.gameObject.SetActive(false);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        CardData data = null;
+                        if (DeckManager.Instance != null)
+                        {
+                            var all = new List<CardData>();
+                            if (DeckManager.Instance.mandirigmaDeck != null) all.AddRange(DeckManager.Instance.mandirigmaDeck);
+                            if (DeckManager.Instance.tagapangalagaDeck != null) all.AddRange(DeckManager.Instance.tagapangalagaDeck);
+                            if (DeckManager.Instance.albularyoDeck != null) all.AddRange(DeckManager.Instance.albularyoDeck);
+                            if (DeckManager.Instance.bakunawaDeck != null) all.AddRange(DeckManager.Instance.bakunawaDeck);
+                            data = all.Find(c => c.cardName == s);
+                        }
+
+                        lockedObj = Instantiate(cardPrefab, targetLockedArea);
+
+                        CardUI ui = lockedObj.GetComponent<CardUI>();
+                        if (ui && data)
+                        {
+                            ui.Setup(data);
+                            ui.SetLockedState(true);
+                        }
+
+                        CardDisplay display = lockedObj.GetComponent<CardDisplay>();
+                        if (display != null)
+                        {
+                            display.cardData = data;
+                            display.currentAttack = data.attackValue;
+                        }
+                    }
+
+                    if (lockedObj != null)
+                    {
+                        Destroy(lockedObj.GetComponent<Button>());
+                        lockedObj.transform.localScale = new Vector3(lockedScale, lockedScale, lockedScale);
+                    }
+                }
+
+                UpdateContainerSpacing(targetLockedArea as RectTransform);
+            }
+        }
+
+        int totalPlayersNeeded = tribesmenTurnOrder.Count;
+        if (bakunawaPlayerID != -1) totalPlayersNeeded++;
+
+        if (executionQueue.Count >= totalPlayersNeeded)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                photonView.RPC("RPC_OpenDicePanel", RpcTarget.All);
+            }
+        }
+        else
+        {
+            if (statusText)
+            {
+                statusText.text = $"Waiting for other players... ({executionQueue.Count}/{totalPlayersNeeded})";
+            }
+        }
+    }
+
+
+
+
+
+
+    [PunRPC]
+    void RPC_OpenDicePanel()
+    {
+        if (dicePanel != null)
+        {
+            dicePanel.SetActive(true);
+            if (PhotonNetwork.IsMasterClient)
+            {
+                if (rollButton)
+                {
+                    rollButton.interactable = true;
+                    rollButton.onClick.RemoveAllListeners();
+                    rollButton.onClick.AddListener(OnHostRollPressed);
+                }
+                if (statusText) statusText.text = "You are the Host. Roll the Dice!";
+            }
+            else
+            {
+                if (rollButton) rollButton.interactable = false;
+                if (statusText) statusText.text = "Waiting for Host to roll...";
+            }
+        }
+    }
+
+    void OnHostRollPressed()
+    {
+        if (rollButton) rollButton.interactable = false;
+        int pRoll = Random.Range(1, 7);
+        int eRoll = Random.Range(1, 7);
+        while (pRoll == eRoll) { pRoll = Random.Range(1, 7); }
+
+        photonView.RPC("RPC_PerformDiceAnimation", RpcTarget.All, pRoll, eRoll);
+    }
+
+    [PunRPC]
+    void RPC_PerformDiceAnimation(int finalPRoll, int finalERoll)
+    {
+        StartCoroutine(MultiplayerDiceRoutine(finalPRoll, finalERoll));
+    }
+
+    IEnumerator MultiplayerDiceRoutine(int pRoll, int eRoll)
+    {
+        float duration = 2.0f;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            int rP = Random.Range(0, 6);
+            int rE = Random.Range(0, 6);
+            if (diceSprites != null && diceSprites.Count >= 6)
+            {
+                playerDiceImg.sprite = diceSprites[rP];
+                enemyDiceImg.sprite = diceSprites[rE];
+            }
+            yield return new WaitForSeconds(0.1f);
+            elapsed += 0.1f;
+        }
+
+        if (diceSprites != null && diceSprites.Count >= 6)
+        {
+            playerDiceImg.sprite = diceSprites[pRoll - 1];
+            enemyDiceImg.sprite = diceSprites[eRoll - 1];
+        }
+
+        yield return new WaitForSeconds(1.0f);
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            bool tribesmenWonRoll = (pRoll > eRoll);
+            photonView.RPC("RPC_ShowTurnChoicePanel", RpcTarget.All, tribesmenWonRoll);
+        }
+    }
+
+    [PunRPC]
+    void RPC_ShowTurnChoicePanel(bool tribesmenWonRoll)
+    {
+        if (dicePanel) dicePanel.SetActive(false);
+
+        bool shouldShowChoice = (this.isTribesman && tribesmenWonRoll) || (!this.isTribesman && !tribesmenWonRoll);
+
+        if (shouldShowChoice)
+        {
+            if (turnChoicePanel != null)
+            {
+                turnChoicePanel.SetActive(true);
+
+                if (goFirstButton != null)
+                {
+                    goFirstButton.onClick.RemoveAllListeners();
+                    goFirstButton.onClick.AddListener(() => OnTurnChoiceMade(true, tribesmenWonRoll));
+                }
+
+                if (goSecondButton != null)
+                {
+                    goSecondButton.onClick.RemoveAllListeners();
+                    goSecondButton.onClick.AddListener(() => OnTurnChoiceMade(false, tribesmenWonRoll));
+                }
+            }
+
+            if (statusText) statusText.text = "Your team won the roll! Choose turn order.";
+        }
+        else
+        {
+            if (statusText) statusText.text = "Waiting for opposing team to choose turn order...";
+        }
+    }
+
+    void OnTurnChoiceMade(bool chooseToGoFirst, bool tribesmenWonRoll)
+    {
+        if (turnChoicePanel != null) turnChoicePanel.SetActive(false);
+
+        if (PhotonNetwork.IsMasterClient || isTribesman)
+        {
+            photonView.RPC("RPC_StartBattlePhase", RpcTarget.All, chooseToGoFirst, tribesmenWonRoll);
+        }
+    }
+
+    [PunRPC]
+    void RPC_StartBattlePhase(bool winningTeamGoesFirst, bool tribesmenWonRoll)
+    {
+        if (turnChoicePanel != null) turnChoicePanel.SetActive(false);
+        if (dicePanel) dicePanel.SetActive(false);
+
+        bool tribesmenGoFirst = (tribesmenWonRoll && winningTeamGoesFirst) || (!tribesmenWonRoll && !winningTeamGoesFirst);
+
+        battleTurnIndex = 0;
+
+        StartCoroutine(StartBattlePhaseSequence(tribesmenGoFirst));
+    }
+
+    IEnumerator StartBattlePhaseSequence(bool tribesmenGoFirst)
+    {
+        if (combatBanner != null)
+        {
+            combatBanner.SetActive(true);
+
+            if (combatBannerText != null)
+            {
+                combatBannerText.text = "BATTLE PHASE!";
+                yield return StartCoroutine(FadeTextInAndOut(combatBannerText, 1.5f));
+            }
+
+            combatBanner.SetActive(false);
+        }
+
+        yield return new WaitForSeconds(0.5f);
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            int firstPlayerID = GetNextBattlePlayer(tribesmenGoFirst);
+
+            if (firstPlayerID != -1)
+            {
+                photonView.RPC("RPC_StartPlayerBattleTurn", RpcTarget.All, firstPlayerID);
+            }
+        }
+    }
+
+    int GetNextBattlePlayer(bool tribesmenTurn)
+    {
+        if (tribesmenTurn)
+        {
+            if (tribesmenLockInOrder.Count == 0) return -1;
+
+            int attempts = 0;
+            while (attempts < tribesmenLockInOrder.Count)
+            {
+                int actorID = tribesmenLockInOrder[battleTurnIndex % tribesmenLockInOrder.Count];
+
+                if (pendingCardsMap.ContainsKey(actorID) && pendingCardsMap[actorID].Count > 0)
+                {
+                    battleTurnIndex++;
+                    return actorID;
+                }
+
+                battleTurnIndex++;
+                attempts++;
+            }
+        }
+        else
+        {
+            if (bakunawaPlayerID != -1)
+            {
+                if (pendingCardsMap.ContainsKey(bakunawaPlayerID) && pendingCardsMap[bakunawaPlayerID].Count > 0)
+                {
+                    return bakunawaPlayerID;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+
+
+
+
+    IEnumerator HostStartManualBattle(bool tribesmenFirst)
+    {
+        photonView.RPC("RPC_UpdateStatus", RpcTarget.All, "Battle Phase Starting!");
+        yield return new WaitForSeconds(1.0f);
+
+        battleTurnIndex = 0;
+
+        int firstActor = GetNextValidPlayer();
+
+        if (firstActor != -1)
+        {
+            photonView.RPC("RPC_StartPlayerBattleTurn", RpcTarget.All, firstActor);
+        }
+        else
+        {
+            photonView.RPC("RPC_EndTurnMP", RpcTarget.All);
+        }
+    }
+
+    int GetNextValidPlayer()
+    {
+        List<int> allPlayers = new List<int>(tribesmenTurnOrder);
+        if (bakunawaPlayerID != -1) allPlayers.Add(bakunawaPlayerID);
+
+        int attempts = 0;
+        int max = allPlayers.Count;
+
+        while (attempts < max)
+        {
+            int actorID = allPlayers[battleTurnIndex % allPlayers.Count];
+
+            if (pendingCardsMap.ContainsKey(actorID) && pendingCardsMap[actorID].Count > 0)
+            {
+                return actorID;
+            }
+
+            battleTurnIndex++;
+            attempts++;
+        }
+        return -1;
+    }
+
+
+    [PunRPC]
+    void RPC_StartPlayerBattleTurn(int actorID)
+    {
+        Debug.Log($"RPC_StartPlayerBattleTurn called. actorID: {actorID}, LocalPlayer: {PhotonNetwork.LocalPlayer.ActorNumber}, isMyTurn: {PhotonNetwork.LocalPlayer.ActorNumber == actorID}");
+
+        if (dicePanel) dicePanel.SetActive(false);
+        if (turnChoicePanel) turnChoicePanel.SetActive(false);
+
+        if (PhotonNetwork.LocalPlayer.ActorNumber == actorID)
+        {
+            inputLocked = false;
+            isPlanningPhase = false;
+
+            Debug.Log("It's my turn! Enabling interaction...");
+
+            if (playCardButton)
+            {
+                playCardButton.gameObject.SetActive(true);
+                playCardButton.interactable = true;
+                Debug.Log("Play button activated");
+            }
+
+            Transform myLockedPanel = isTribesman ? tribeLockedPanel : bakunawaLockedPanel;
+            Debug.Log($"My locked panel: {myLockedPanel.name}, card count: {myLockedPanel.childCount}");
+
+            foreach (Transform t in myLockedPanel)
+            {
+                CardUI c = t.GetComponent<CardUI>();
+                if (c)
+                {
+                    Debug.Log($"Unlocking card: {c.name}");
+                    c.SetLockedState(false);
+
+                    Button btn = c.GetComponent<Button>();
+                    if (btn == null)
+                    {
+                        btn = c.gameObject.AddComponent<Button>();
+                        btn.transition = Selectable.Transition.None;
+                        Debug.Log("Added button component");
+                    }
+                    btn.interactable = true;
+
+                    btn.onClick.RemoveAllListeners();
+                    btn.onClick.AddListener(() => SelectCardForBattle(c));
+                    Debug.Log("Button listener added");
+                }
+            }
+
+            if (statusText) statusText.text = "YOUR BATTLE TURN: Select and play a card!";
+        }
+        else
+        {
+            inputLocked = true;
+            isPlanningPhase = false;
+
+            if (playCardButton) playCardButton.gameObject.SetActive(false);
+
+            if (statusText) statusText.text = $"Waiting for Player {actorID} to play...";
+            Debug.Log($"Not my turn, waiting for player {actorID}");
+        }
+    }
+
+
+    [PunRPC]
+    void RPC_UpdateStatus(string message)
+    {
+        if (statusText) statusText.text = message;
+    }
+
+    public bool TryPlayCard(CardUI card)
+    {
+        if (inputLocked) return false;
+
+        if (isMultiplayer)
+        {
+            StartCoroutine(MultiplayerPlayCardSequence(card));
+            return true;
+        }
+
+        if (!playerGoesFirst && !playCardButton.interactable) return false;
+        StartCoroutine(PlayPlayerCardSequence(card));
+        return true;
+    }
+
+    IEnumerator MultiplayerPlayCardSequence(CardUI card)
+    {
+        inputLocked = true;
+        if (playCardButton) playCardButton.interactable = false;
+
+        CardDisplay d = card.GetComponent<CardDisplay>();
+        string cardName = (d && d.cardData) ? d.cardData.cardName : "Unknown";
+
+        if (pendingCardsMap.ContainsKey(PhotonNetwork.LocalPlayer.ActorNumber))
+        {
+            pendingCardsMap[PhotonNetwork.LocalPlayer.ActorNumber].Remove(cardName);
+        }
+
+        bool isTribesmanCard = isTribesman;
+
+        photonView.RPC("RPC_ExecuteBattleMove", RpcTarget.All, cardName, PhotonNetwork.LocalPlayer.ActorNumber, isTribesmanCard);
+
+        yield return new WaitForSeconds(0.1f);
+
+        currentBattleSelection = null;
+    }
+
+    [PunRPC]
+    void RPC_ExecuteBattleMove(string cardName, int ownerID, bool isTribesmanCard)
+    {
+        if (pendingCardsMap.ContainsKey(ownerID))
+        {
+            pendingCardsMap[ownerID].Remove(cardName);
+        }
+
+        CardData cardData = null;
+        if (DeckManager.Instance)
+        {
+            var all = new List<CardData>();
+            if (DeckManager.Instance.mandirigmaDeck != null) all.AddRange(DeckManager.Instance.mandirigmaDeck);
+            if (DeckManager.Instance.tagapangalagaDeck != null) all.AddRange(DeckManager.Instance.tagapangalagaDeck);
+            if (DeckManager.Instance.albularyoDeck != null) all.AddRange(DeckManager.Instance.albularyoDeck);
+            if (DeckManager.Instance.bakunawaDeck != null) all.AddRange(DeckManager.Instance.bakunawaDeck);
+            cardData = all.Find(c => c.cardName == cardName);
+        }
+
+        Transform sourcePanel = isTribesmanCard ? tribeLockedPanel : bakunawaLockedPanel;
+
+        if (ownerID == PhotonNetwork.LocalPlayer.ActorNumber)
+        {
+            foreach (Transform t in sourcePanel)
+            {
+                CardDisplay cd = t.GetComponent<CardDisplay>();
+                if (cd != null && cd.cardData != null && cd.cardData.cardName == cardName)
+                {
+                    Destroy(t.gameObject);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            bool isOpposingTeam = (this.isTribesman != isTribesmanCard);
+
+            if (!isOpposingTeam)
+            {
+                foreach (Transform t in sourcePanel)
+                {
+                    CardDisplay cd = t.GetComponent<CardDisplay>();
+                    if (cd != null && cd.cardData != null && cd.cardData.cardName == cardName)
+                    {
+                        Destroy(t.gameObject);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                if (sourcePanel.childCount > 0)
+                {
+                    Destroy(sourcePanel.GetChild(0).gameObject);
+                }
+            }
+        }
+
+        GameObject cardObj = Instantiate(cardPrefab, battleZone);
+        CardUI cardUI = cardObj.GetComponent<CardUI>();
+        if (cardData && cardUI) cardUI.Setup(cardData);
+
+        CardDisplay display = cardObj.GetComponent<CardDisplay>();
+        if (display != null)
+        {
+            display.cardData = cardData;
+            display.currentAttack = cardData.attackValue;
+        }
+
+        cardUI.isEnemy = !isTribesmanCard;
+        cardObj.transform.localScale = new Vector3(playCardScale, playCardScale, playCardScale);
+
+        if (isTribesmanCard)
+        {
+            pendingTribesmanCard = cardUI;
+            waitingForBakunawaCard = true;
+
+            if (statusText) statusText.text = $"Tribesman played {cardName}. Waiting for Bakunawa...";
+        }
+        else
+        {
+            pendingBakunawaCard = cardUI;
+            waitingForTribesmanCard = true;
+
+            if (statusText) statusText.text = $"Bakunawa played {cardName}. Waiting for Tribesman...";
+        }
+
+        if (pendingTribesmanCard != null && pendingBakunawaCard != null)
+        {
+            StartCoroutine(ExecuteClashSequence());
+        }
+        else
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                StartCoroutine(DetermineNextTurn());
+            }
+        }
+    }
+
+
+    IEnumerator ExecuteClashSequence()
+    {
+        waitingForBakunawaCard = false;
+        waitingForTribesmanCard = false;
+
+        yield return new WaitForSeconds(0.5f);
+
+        yield return StartCoroutine(AnimateCardClash(pendingTribesmanCard, pendingBakunawaCard));
+
+        int tribesmanAttack = GetCardAttack(pendingTribesmanCard);
+        int bakunawaAttack = GetCardAttack(pendingBakunawaCard);
+
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.ResolveClash(tribesmanAttack, bakunawaAttack);
+        }
+
+        pendingTribesmanCard = null;
+        pendingBakunawaCard = null;
+
+        yield return new WaitForSeconds(1.0f);
+
+        foreach (Transform t in battleZone)
+        {
+            Destroy(t.gameObject);
+        }
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            StartCoroutine(DetermineNextTurn());
+        }
+    }
+
+    IEnumerator DetermineNextTurn()
+    {
+        yield return new WaitForSeconds(0.3f);
+
+        bool anyTribesmenHasCards = false;
+        foreach (int tribeID in tribesmenLockInOrder)
+        {
+            if (pendingCardsMap.ContainsKey(tribeID) && pendingCardsMap[tribeID].Count > 0)
+            {
+                anyTribesmenHasCards = true;
+                break;
+            }
+        }
+
+        bool bakunawaHasCards = (bakunawaPlayerID != -1 && pendingCardsMap.ContainsKey(bakunawaPlayerID) && pendingCardsMap[bakunawaPlayerID].Count > 0);
+
+        if (!anyTribesmenHasCards && !bakunawaHasCards)
+        {
+            photonView.RPC("RPC_EndTurnMP", RpcTarget.All);
+            yield break;
+        }
+
+        if (pendingTribesmanCard == null && pendingBakunawaCard == null)
+        {
+            int nextPlayer = -1;
+
+            if (anyTribesmenHasCards)
+            {
+                nextPlayer = GetNextBattlePlayer(true);
+            }
+
+            if (nextPlayer == -1 && bakunawaHasCards)
+            {
+                nextPlayer = bakunawaPlayerID;
+            }
+
+            if (nextPlayer != -1)
+            {
+                photonView.RPC("RPC_StartPlayerBattleTurn", RpcTarget.All, nextPlayer);
+            }
+            else
+            {
+                photonView.RPC("RPC_EndTurnMP", RpcTarget.All);
+            }
+        }
+        else if (pendingTribesmanCard != null && pendingBakunawaCard == null)
+        {
+            if (bakunawaHasCards)
+            {
+                photonView.RPC("RPC_StartPlayerBattleTurn", RpcTarget.All, bakunawaPlayerID);
+            }
+            else
+            {
+                yield return StartCoroutine(ExecuteClashSequence());
+            }
+        }
+        else if (pendingBakunawaCard != null && pendingTribesmanCard == null)
+        {
+            if (anyTribesmenHasCards)
+            {
+                int nextTribesman = GetNextBattlePlayer(true);
+                if (nextTribesman != -1)
+                {
+                    photonView.RPC("RPC_StartPlayerBattleTurn", RpcTarget.All, nextTribesman);
+                }
+            }
+            else
+            {
+                yield return StartCoroutine(ExecuteClashSequence());
+            }
+        }
+    }
+
+
+
+    IEnumerator ResolveMultiplayerClash(CardUI p, CardUI e)
+    {
+        yield return StartCoroutine(AnimateCardClash(p, e));
+    }
+
+
+
+    [PunRPC]
+    void RPC_EndTurnMP()
+    {
+        pendingTribesmanCard = null;
+        pendingBakunawaCard = null;
+        waitingForBakunawaCard = false;
+        waitingForTribesmanCard = false;
+
+        if (centerStage) foreach (Transform t in centerStage) Destroy(t.gameObject);
+        if (lockedArea) foreach (Transform t in lockedArea) Destroy(t.gameObject);
+        if (battleZone) foreach (Transform t in battleZone) Destroy(t.gameObject);
+        if (tribeLockedPanel) foreach (Transform t in tribeLockedPanel) Destroy(t.gameObject);
+        if (bakunawaLockedPanel) foreach (Transform t in bakunawaLockedPanel) Destroy(t.gameObject);
+        if (dicePanel) dicePanel.SetActive(false);
+        if (lockInButton) lockInButton.interactable = true;
+
+        currentEnergy = maxEnergy;
+        UpdateEnergyUI();
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            executionQueue.Clear();
+            pendingCardsMap.Clear();
+            tribesmenLockInOrder.Clear();
+            readyPlayersCount = 0;
+            battleTurnIndex = 0;
+        }
+
+        roundNumber++;
+        UpdateRoundUI();
+
+        SetupMultiplayer();
+    }
+
+
 
     void StartDicePhase()
     {
@@ -1226,6 +1853,7 @@ public class HandManager : MonoBehaviour
     void OnRollDicePressed()
     {
         rollButton.interactable = false;
+        if (isMultiplayer) return;
         StartCoroutine(RollDiceRoutine());
     }
 
@@ -1318,27 +1946,12 @@ public class HandManager : MonoBehaviour
                 yield return StartCoroutine(FadeTextInAndOut(combatBannerText, 2.0f));
             }
 
-        if (bannerGroup != null) { while (bannerGroup.alpha > 0) { bannerGroup.alpha -= Time.deltaTime * 3f; yield return null; } }
+            if (bannerGroup != null) { while (bannerGroup.alpha > 0) { bannerGroup.alpha -= Time.deltaTime * 3f; yield return null; } }
             combatBanner.SetActive(false);
         }
         else yield return new WaitForSeconds(1.0f);
 
         StartCoroutine(StartBattlePhase());
-    }
-
-    public bool TryPlayCard(CardUI card)
-    {
-        // Check if we are allowed to play
-        if (inputLocked) return false;
-        if (!playerGoesFirst && !playCardButton.interactable) return false; // Not our turn
-        if (playCardButton.gameObject.activeSelf && !playCardButton.interactable) return false; // General lock
-
-        // Check if it's actually our turn logic (simplified by reusing button interactable state)
-        // If button is hidden, we use 'playCardButton.interactable' state as the logical flag
-        if (!playCardButton.interactable) return false;
-
-        StartCoroutine(PlayPlayerCardSequence(card));
-        return true;
     }
 
     IEnumerator StartBattlePhase()
@@ -1356,31 +1969,25 @@ public class HandManager : MonoBehaviour
         {
             enemyHasPlayedPendingCard = false;
             pendingEnemyCard = null;
-            // HIDDEN: Using Drag instead
-            playCardButton.gameObject.SetActive(false); 
-            
-            // Turn Indicator: Player's turn
+            playCardButton.gameObject.SetActive(false);
+
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
-            
+
             yield return StartCoroutine(ShowTurnNotificationRoutine(true));
-            
+
             inputLocked = false;
             playCardButton.interactable = true;
         }
         else
         {
-            // Lock Input as Enemy plays first
             inputLocked = true;
-            
-            // HIDDEN: Using Drag instead
             playCardButton.gameObject.SetActive(false);
             playCardButton.interactable = false;
-            
-            // Turn Indicator: Bakunawa's turn
+
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
-            
+
             yield return StartCoroutine(ShowTurnNotificationRoutine(false));
-            
+
             StartCoroutine(EnemyPlaysFirstRoutine());
         }
     }
@@ -1392,18 +1999,15 @@ public class HandManager : MonoBehaviour
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             pendingEnemyCard = BakunawaAI.Instance.PlayCard();
-            
-            // Animate card dragging to board
+
             yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(pendingEnemyCard));
-            
+
             enemyHasPlayedPendingCard = true;
             RecalculateBattleEffects();
-            
-            // Allow Player Action
+
             inputLocked = false;
             playCardButton.interactable = true;
-            
-            // Turn Indicator: Switch to Player's turn
+
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
 
             yield return StartCoroutine(ShowTurnNotificationRoutine(true));
@@ -1412,8 +2016,7 @@ public class HandManager : MonoBehaviour
         {
             inputLocked = false;
             playCardButton.interactable = true;
-            
-            // Turn Indicator: Player's turn
+
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
 
             yield return StartCoroutine(ShowTurnNotificationRoutine(true));
@@ -1422,23 +2025,20 @@ public class HandManager : MonoBehaviour
 
     IEnumerator BakunawaResponseSequence(CardUI playerCard)
     {
-        // Turn Indicator: Bakunawa's turn
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
-        
+
         yield return StartCoroutine(ShowTurnNotificationRoutine(false));
-        
+
         yield return new WaitForSeconds(0.5f);
 
         if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            
-            // Animate card moving to board
-            yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(enemyCard));
-            
-            RecalculateBattleEffects(); // This puts card in battleZone and updates state
 
-            // NEW: Animate Clash
+            yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(enemyCard));
+
+            RecalculateBattleEffects();
+
             yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
             if (ScoreManager.Instance != null)
@@ -1450,9 +2050,7 @@ public class HandManager : MonoBehaviour
         }
         else
         {
-             // Direct Attack (No enemy card)
-             // Animate just Player Card hitting 'something'
-             yield return StartCoroutine(AnimateCardClash(playerCard, null));
+            yield return StartCoroutine(AnimateCardClash(playerCard, null));
 
             if (ScoreManager.Instance != null)
             {
@@ -1468,12 +2066,8 @@ public class HandManager : MonoBehaviour
 
     IEnumerator ResolveImmediateClash(CardUI playerCard, CardUI enemyCard)
     {
-        // OLD: yield return new WaitForSeconds(0.5f);
-        
-        // NEW: Animate Clash
         yield return StartCoroutine(AnimateCardClash(playerCard, enemyCard));
 
-        // Score Resolution happens AFTER clash
         int pAtk = GetCardAttack(playerCard);
         int eAtk = (enemyCard != null) ? GetCardAttack(enemyCard) : 0;
 
@@ -1499,7 +2093,6 @@ public class HandManager : MonoBehaviour
     {
         if (tribeLockedPanel.childCount > 0)
         {
-            // Turn Indicator: Player's turn
             if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetTribeTurn();
 
             yield return StartCoroutine(ShowTurnNotificationRoutine(true));
@@ -1509,7 +2102,6 @@ public class HandManager : MonoBehaviour
         }
         else
         {
-            // Lock logic handled by next routines or EndRound
             if (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
                 StartCoroutine(BakunawaSoloPlaySequence());
             else
@@ -1519,19 +2111,17 @@ public class HandManager : MonoBehaviour
 
     IEnumerator BakunawaSoloPlaySequence()
     {
-        // Turn Indicator: Bakunawa's turn (solo play)
         if (TurnIndicatorEffect.Instance != null) TurnIndicatorEffect.Instance.SetBakunawaTurn();
 
         yield return StartCoroutine(ShowTurnNotificationRoutine(false));
-        
+
         while (BakunawaAI.Instance != null && BakunawaAI.Instance.HasLockedCards())
         {
             yield return new WaitForSeconds(1.0f);
             CardUI enemyCard = BakunawaAI.Instance.PlayCard();
-            
-            // Animate card moving to board
+
             yield return StartCoroutine(BakunawaAI.Instance.AnimateCurveToBoard(enemyCard));
-            
+
             RecalculateBattleEffects();
 
             if (ScoreManager.Instance != null)
@@ -1656,22 +2246,20 @@ public class HandManager : MonoBehaviour
         else TriggerGameOver("Draw");
     }
 
-    // moved logic to end of file to override
-
     void MoveToPile(CardUI card, Transform pile, bool faceDown) { card.transform.SetParent(pile); card.transform.localPosition = Vector3.zero; card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); card.SwitchToDeckMode(faceDown); }
     void ShuffleList(List<CardUI> list) { for (int i = 0; i < list.Count; i++) { CardUI temp = list[i]; int randomIndex = Random.Range(i, list.Count); list[i] = list[randomIndex]; list[randomIndex] = temp; } }
-    void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = maxEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
+    void UpdateEnergyUI() { int currentUsed = 0; foreach (CardUI card in selectedCardsUI) currentUsed += GetCardCost(card); int remaining = currentEnergy - currentUsed; if (energySlider != null) { energySlider.maxValue = maxEnergy; energySlider.value = Mathf.Max(0, remaining); } if (energyText != null) { energyText.text = remaining.ToString() + "/" + maxEnergy.ToString(); if (remaining < 0) energyText.color = Color.red; else energyText.color = Color.white; } }
     void SetEnergyUIActive(bool isActive) { if (energySlider != null) energySlider.gameObject.SetActive(isActive); if (energyText != null) energyText.gameObject.SetActive(isActive); }
-    public bool ToggleCardSelection(CardUI cardUI, bool isSelected) 
-    { 
-        if (!isPlanningPhase) return false; 
-        
-        if (isSelected) 
+
+    public bool ToggleCardSelection(CardUI cardUI, bool isSelected)
+    {
+        if (!isPlanningPhase) return false;
+
+        if (isSelected)
         {
-            // Optional: Check energy limit before allowing move
             int currentUsed = 0;
             foreach (CardUI c in selectedCardsUI) currentUsed += GetCardCost(c);
-            if (currentUsed + GetCardCost(cardUI) > maxEnergy)
+            if (currentUsed + GetCardCost(cardUI) > currentEnergy)
             {
                 StartCoroutine(ShowWarningSequence());
                 return false;
@@ -1679,403 +2267,194 @@ public class HandManager : MonoBehaviour
 
             selectedCardsUI.Add(cardUI);
             cardUI.transform.SetParent(tribeSelectedPanel);
-            cardUI.transform.localRotation = Quaternion.identity; // Reset rotation from curve
-            cardUI.UpdateLockedLayout(); // Ensure spacing is correct for scaled card
-            // Scale and position will be handled by CardUI.UpdateAnimation or LayoutGroup
+            cardUI.transform.localRotation = Quaternion.identity;
+            cardUI.UpdateLockedLayout();
         }
-        else 
+        else
         {
             selectedCardsUI.Remove(cardUI);
             ReturnCardToHand(cardUI);
         }
-        
-        UpdateEnergyUI(); 
-        
-        // Fix: Update spacing for the selected panel to prevent overlapping
+
+        UpdateEnergyUI();
+
         UpdateContainerSpacing(tribeSelectedPanel as RectTransform);
-        
-        // Force layout update for the hand since a card left/entered
         if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate();
-        
-        return true; 
+
+        return true;
     }
+
     IEnumerator ShowWarningSequence() { if (warningText != null) { warningText.gameObject.SetActive(true); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, 1); yield return new WaitForSeconds(0.5f); float duration = 1.0f; float currentTime = 0f; while (currentTime < duration) { float alpha = Mathf.Lerp(1f, 0f, currentTime / duration); warningText.color = new Color(warningText.color.r, warningText.color.g, warningText.color.b, alpha); currentTime += Time.deltaTime; yield return null; } warningText.gameObject.SetActive(false); } }
     int GetCardCost(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null && display.cardData != null) return display.cardData.energyCost; if (card.costText != null && int.TryParse(card.costText.text, out int val)) return val; return 0; }
     int GetCardAttack(CardUI card) { if (card == null) return 0; CardDisplay display = card.GetComponent<CardDisplay>(); if (display != null) return display.currentAttack; if (card.attackText != null && int.TryParse(card.attackText.text, out int val)) return val; return 0; }
-    void SpawnDeck() 
-    { 
-        foreach (CardData card in myDeck) 
-        { 
-            GameObject newCard = Instantiate(cardPrefab, handArea); 
-            CardUI ui = newCard.GetComponent<CardUI>(); 
-            ui.Setup(card); 
-            CardDisplay display = newCard.GetComponent<CardDisplay>(); 
-            if (display != null) 
-            { 
-                display.cardData = card; 
-                display.currentAttack = card.attackValue; 
-            } 
-        } 
+
+    void SpawnDeck()
+    {
+        foreach (CardData card in myDeck)
+        {
+            GameObject newCard = Instantiate(cardPrefab, handArea);
+            CardUI ui = newCard.GetComponent<CardUI>();
+            ui.Setup(card);
+            CardDisplay display = newCard.GetComponent<CardDisplay>();
+            if (display != null)
+            {
+                display.cardData = card;
+                display.currentAttack = card.attackValue;
+            }
+        }
         UpdateHandPagination();
     }
 
-    // --- PAGINATION LOGIC ---
     public void UpdateHandPagination()
     {
         if (handArea == null) return;
-
         int totalCards = handArea.childCount;
         int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
-        
         if (currentPage > maxPage) currentPage = maxPage;
         if (currentPage < 0) currentPage = 0;
-
         int startIndex = currentPage * cardsPerPage;
         int endIndex = startIndex + cardsPerPage;
 
-        // Iterate through all cards in hand
         for (int i = 0; i < totalCards; i++)
         {
             Transform child = handArea.GetChild(i);
             bool shouldBeVisible = (i >= startIndex && i < endIndex);
             child.gameObject.SetActive(shouldBeVisible);
         }
-
-        // Update Buttons
         bool showPagination = isPlanningPhase;
 
-        if (prevPageBtn != null)
-        {
-            prevPageBtn.gameObject.SetActive(showPagination);
-            if (showPagination) prevPageBtn.interactable = (currentPage > 0);
-        }
-        if (nextPageBtn != null)
-        {
-            nextPageBtn.gameObject.SetActive(showPagination);
-            if (showPagination) nextPageBtn.interactable = (currentPage < maxPage);
-        }
-
-        // Update Text
-        if (pageIndicatorText != null)
-        {
-            pageIndicatorText.gameObject.SetActive(showPagination);
-            if (showPagination)
-            {
-                pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}";
-            }
-        }
-
-        // Force Layout Update for the visible cards
-        if (CurvedHandLayout.Instance != null) 
-        {
-            CurvedHandLayout.Instance.ForceLayoutUpdate();
-        }
+        if (prevPageBtn != null) { prevPageBtn.gameObject.SetActive(showPagination); if (showPagination) prevPageBtn.interactable = (currentPage > 0); }
+        if (nextPageBtn != null) { nextPageBtn.gameObject.SetActive(showPagination); if (showPagination) nextPageBtn.interactable = (currentPage < maxPage); }
+        if (pageIndicatorText != null) { pageIndicatorText.gameObject.SetActive(showPagination); if (showPagination) pageIndicatorText.text = $"Page {currentPage + 1}/{maxPage + 1}"; }
+        if (CurvedHandLayout.Instance != null) CurvedHandLayout.Instance.ForceLayoutUpdate();
     }
 
-    void NextHandPage()
-    {
-        int totalCards = handArea.childCount;
-        int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1);
-        if (currentPage < maxPage)
-        {
-            currentPage++;
-            UpdateHandPagination();
-        }
-    }
+    void NextHandPage() { int totalCards = handArea.childCount; int maxPage = Mathf.Max(0, Mathf.CeilToInt((float)totalCards / cardsPerPage) - 1); if (currentPage < maxPage) { currentPage++; UpdateHandPagination(); } }
+    void PrevHandPage() { if (currentPage > 0) { currentPage--; UpdateHandPagination(); } }
+    void ReturnCardToHand(CardUI card) { card.transform.SetParent(handArea); card.transform.localScale = Vector3.one; card.ResetToHandMode(); UpdateHandPagination(); }
+    void EnsureButtonAnimation(Button btn) { if (btn != null) { if (btn.gameObject.GetComponent<UIButtonAnimation>() == null) { btn.gameObject.AddComponent<UIButtonAnimation>(); } } }
 
-    void PrevHandPage()
-    {
-        if (currentPage > 0)
-        {
-            currentPage--;
-            UpdateHandPagination();
-        }
-    }
-
-    // Overwrite ReturnCardToHand to use pagination
-    void ReturnCardToHand(CardUI card) 
-    { 
-        card.transform.SetParent(handArea); 
-        card.transform.localScale = Vector3.one; 
-        card.ResetToHandMode(); 
-        
-        // Ensure the card is counted in pagination
-        UpdateHandPagination(); 
-    }
-
-    void EnsureButtonAnimation(Button btn)
-    {
-        if (btn != null)
-        {
-            if (btn.gameObject.GetComponent<UIButtonAnimation>() == null)
-            {
-                btn.gameObject.AddComponent<UIButtonAnimation>();
-            }
-        }
-    }
     void CreateImpactSparks(Vector3 pos)
     {
-        // Trigger bloom spike for post-processing glow
-        if (ClashBloomController.Instance != null)
-        {
-            ClashBloomController.Instance.TriggerClashBloom();
-        }
-        
-        // 1. Container
+        if (ClashBloomController.Instance != null) ClashBloomController.Instance.TriggerClashBloom();
         GameObject container = new GameObject("SparkContainer");
         container.transform.position = pos;
-        
         Canvas root = GetComponentInParent<Canvas>();
         if (root != null && root.rootCanvas != null) root = root.rootCanvas;
-        if (root != null) container.transform.SetParent(root.transform);
-        else container.transform.SetParent(transform);
-        
-        container.transform.localScale = Vector3.one;
-        container.transform.SetAsLastSibling(); // Top of everything
-        
-        // Add Canvas with high sorting order to render above dimmer (1999) and cards (2000)
+        if (root != null) container.transform.SetParent(root.transform); else container.transform.SetParent(transform);
+        container.transform.localScale = Vector3.one; container.transform.SetAsLastSibling();
         Canvas sparkCanvas = container.AddComponent<Canvas>();
         sparkCanvas.overrideSorting = true;
         sparkCanvas.sortingLayerName = root != null ? root.sortingLayerName : "Default";
-        sparkCanvas.sortingOrder = 2001; // Above cards (2000)
+        sparkCanvas.sortingOrder = 2001;
         container.AddComponent<GraphicRaycaster>();
-
-        // Try to get HDR glow material for sparks
         Material hdrGlowMat = null;
         Shader hdrShader = Shader.Find("UI/HDRGlow");
-        if (hdrShader != null)
-        {
-            hdrGlowMat = new Material(hdrShader);
-            hdrGlowMat.SetFloat("_GlowIntensity", 4f);
-            hdrGlowMat.SetFloat("_GlowFalloff", 1.5f);
-        }
+        if (hdrShader != null) { hdrGlowMat = new Material(hdrShader); hdrGlowMat.SetFloat("_GlowIntensity", 4f); hdrGlowMat.SetFloat("_GlowFalloff", 1.5f); }
+        Texture2D fallbackGlowTex = null;
+        if (hdrGlowMat == null) fallbackGlowTex = CreateGlowTexture(64);
 
-        // 3. Spawn GLOWING Sprites with HDR materials
         int sparkCount = 24;
         List<RectTransform> sparks = new List<RectTransform>();
         List<Image> sparkImages = new List<Image>();
         List<Vector2> velocities = new List<Vector2>();
         List<Image> glowHalos = new List<Image>();
-        
-        // Fallback texture for non-HDR path
-        Texture2D fallbackGlowTex = null;
-        if (hdrGlowMat == null)
-        {
-            fallbackGlowTex = CreateGlowTexture(64);
-        }
 
-        for(int i=0; i<sparkCount; i++)
+        for (int i = 0; i < sparkCount; i++)
         {
-            // Bright glowing colors
             float rVal = Random.value;
             Color sparkColor;
-            if (rVal > 0.6f) sparkColor = new Color(1f, 1f, 0.7f); // Bright white-yellow
-            else if (rVal > 0.3f) sparkColor = new Color(1f, 0.85f, 0.2f); // Bright gold
-            else sparkColor = new Color(1f, 0.5f, 0.1f); // Hot orange
-            
-            // Create GLOW HALO behind the spark
+            if (rVal > 0.6f) sparkColor = new Color(1f, 1f, 0.7f);
+            else if (rVal > 0.3f) sparkColor = new Color(1f, 0.85f, 0.2f);
+            else sparkColor = new Color(1f, 0.5f, 0.1f);
+
             GameObject halo = new GameObject("Halo");
             halo.transform.SetParent(container.transform);
             halo.transform.position = pos;
             halo.transform.localScale = Vector3.one;
-            
             Image haloImg = halo.AddComponent<Image>();
-            
-            // Use HDR material for halo
-            if (hdrGlowMat != null)
-            {
-                Material haloMat = new Material(hdrGlowMat);
-                haloMat.SetColor("_Color", sparkColor);
-                haloMat.SetFloat("_GlowIntensity", 3f); // Softer glow for halo
-                haloImg.material = haloMat;
-                haloImg.color = new Color(1f, 1f, 1f, 0.6f);
-            }
-            else
-            {
-                haloImg.sprite = Sprite.Create(fallbackGlowTex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
-                haloImg.color = new Color(sparkColor.r, sparkColor.g, sparkColor.b, 0.4f);
-            }
-            
-            // Create the SPARK on top
+
+            if (hdrGlowMat != null) { Material haloMat = new Material(hdrGlowMat); haloMat.SetColor("_Color", sparkColor); haloMat.SetFloat("_GlowIntensity", 3f); haloImg.material = haloMat; haloImg.color = new Color(1f, 1f, 1f, 0.6f); }
+            else { haloImg.sprite = Sprite.Create(fallbackGlowTex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f)); haloImg.color = new Color(sparkColor.r, sparkColor.g, sparkColor.b, 0.4f); }
+
             GameObject s = new GameObject("Spark");
             s.transform.SetParent(container.transform);
             s.transform.position = pos;
             s.transform.localScale = Vector3.one;
-            
             Image img = s.AddComponent<Image>();
-            
-            // Use HDR material for spark
-            if (hdrGlowMat != null)
-            {
-                Material sparkMat = new Material(hdrGlowMat);
-                sparkMat.SetColor("_Color", sparkColor);
-                sparkMat.SetFloat("_GlowIntensity", 5f); // Bright spark core
-                sparkMat.SetFloat("_GlowFalloff", 2f); // Sharper falloff
-                img.material = sparkMat;
-                img.color = Color.white;
-            }
-            else
-            {
-                img.color = sparkColor;
-            }
-            
-            // Random direction
+
+            if (hdrGlowMat != null) { Material sparkMat = new Material(hdrGlowMat); sparkMat.SetColor("_Color", sparkColor); sparkMat.SetFloat("_GlowIntensity", 5f); sparkMat.SetFloat("_GlowFalloff", 2f); img.material = sparkMat; img.color = Color.white; }
+            else { img.color = sparkColor; }
+
             Vector2 dir = Random.insideUnitCircle.normalized;
-            float speed = Random.Range(400f, 1000f); // Faster for more energy
+            float speed = Random.Range(400f, 1000f);
             velocities.Add(dir * speed);
 
             RectTransform rt = s.GetComponent<RectTransform>();
             RectTransform haloRT = halo.GetComponent<RectTransform>();
-            
             float size = Random.Range(8f, 24f);
             rt.sizeDelta = new Vector2(size, size);
-            haloRT.sizeDelta = new Vector2(size * 3f, size * 3f); // Halo is 3x bigger
-            
-            sparks.Add(rt);
-            sparkImages.Add(img);
-            glowHalos.Add(haloImg);
-        }
+            haloRT.sizeDelta = new Vector2(size * 3f, size * 3f);
 
+            sparks.Add(rt); sparkImages.Add(img); glowHalos.Add(haloImg);
+        }
         StartCoroutine(AnimateSparksExplosion(container, sparks, sparkImages, glowHalos, velocities));
     }
-    
+
     Texture2D CreateGlowTexture(int size)
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         Color[] pixels = new Color[size * size];
         float center = size / 2f;
-        
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float dx = (x - center) / center;
-                float dy = (y - center) / center;
-                float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                
-                // Radial gradient: bright center, fading out
-                float alpha = Mathf.Clamp01(1f - dist);
-                alpha = Mathf.Pow(alpha, 1.5f); // Softer falloff
-                
-                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
-            }
-        }
-        
-        tex.SetPixels(pixels);
-        tex.Apply();
-        tex.filterMode = FilterMode.Bilinear;
+        for (int y = 0; y < size; y++) { for (int x = 0; x < size; x++) { float dx = (x - center) / center; float dy = (y - center) / center; float dist = Mathf.Sqrt(dx * dx + dy * dy); float alpha = Mathf.Clamp01(1f - dist); alpha = Mathf.Pow(alpha, 1.5f); pixels[y * size + x] = new Color(1f, 1f, 1f, alpha); } }
+        tex.SetPixels(pixels); tex.Apply(); tex.filterMode = FilterMode.Bilinear;
         return tex;
     }
 
-    IEnumerator AnimateSparksExplosion(GameObject container, List<RectTransform> sparks, 
-        List<Image> sparkImages, List<Image> glowHalos, List<Vector2> velocities)
+    IEnumerator AnimateSparksExplosion(GameObject container, List<RectTransform> sparks, List<Image> sparkImages, List<Image> glowHalos, List<Vector2> velocities)
     {
-        float duration = 0.5f;
-        float elapsed = 0f;
-
-        while(elapsed < duration && container != null)
+        float duration = 0.5f; float elapsed = 0f;
+        while (elapsed < duration && container != null)
         {
             float t = elapsed / duration;
-            
-            for(int i=0; i<sparks.Count; i++)
+            for (int i = 0; i < sparks.Count; i++)
             {
-                if(sparks[i] == null) continue;
-                
-                // Move spark
+                if (sparks[i] == null) continue;
                 sparks[i].anchoredPosition += velocities[i] * Time.deltaTime;
-                
-                // Move halo with spark
-                if (i < glowHalos.Count && glowHalos[i] != null)
-                {
-                    RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>();
-                    if (haloRT != null)
-                        haloRT.anchoredPosition = sparks[i].anchoredPosition;
-                }
-                
-                // Slow down (Drag)
+                if (i < glowHalos.Count && glowHalos[i] != null) { RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>(); if (haloRT != null) haloRT.anchoredPosition = sparks[i].anchoredPosition; }
                 velocities[i] = Vector2.Lerp(velocities[i], Vector2.zero, Time.deltaTime * 5f);
-                
-                // Fade spark and halo
-                float fadeT = t * t; // Quadratic fade
-                if (sparkImages[i] != null)
-                {
-                    Color c = sparkImages[i].color;
-                    c.a = Mathf.Lerp(1f, 0f, fadeT);
-                    sparkImages[i].color = c;
-                }
-                if (i < glowHalos.Count && glowHalos[i] != null)
-                {
-                    Color c = glowHalos[i].color;
-                    c.a = Mathf.Lerp(0.5f, 0f, fadeT);
-                    glowHalos[i].color = c;
-                }
-                
-                // Shrink
+                float fadeT = t * t;
+                if (sparkImages[i] != null) { Color c = sparkImages[i].color; c.a = Mathf.Lerp(1f, 0f, fadeT); sparkImages[i].color = c; }
+                if (i < glowHalos.Count && glowHalos[i] != null) { Color c = glowHalos[i].color; c.a = Mathf.Lerp(0.5f, 0f, fadeT); glowHalos[i].color = c; }
                 sparks[i].localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
-                if (i < glowHalos.Count && glowHalos[i] != null)
-                {
-                    RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>();
-                    if (haloRT != null)
-                        haloRT.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
-                }
+                if (i < glowHalos.Count && glowHalos[i] != null) { RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>(); if (haloRT != null) haloRT.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t); }
             }
-            elapsed += Time.deltaTime;
-            yield return null;
+            elapsed += Time.deltaTime; yield return null;
         }
-        
-        if(container != null) Destroy(container);
+        if (container != null) Destroy(container);
     }
 
-    // --- DYNAMIC LAYOUT HELPER ---
     public void UpdateContainerSpacing(RectTransform container)
     {
         if (container == null) return;
         HorizontalLayoutGroup hlg = container.GetComponent<HorizontalLayoutGroup>();
         if (hlg == null) return;
-
-        // FORCE settings to prevent fighting
-        hlg.childControlWidth = false;
-        hlg.childForceExpandWidth = false;
-
+        hlg.childControlWidth = false; hlg.childForceExpandWidth = false;
         int count = container.childCount;
-        if (count <= 1) 
-        {
-            hlg.spacing = 20; // Default
-            return;
-        }
-
-        // Force canvas update to ensure rects are valid
+        if (count <= 1) { hlg.spacing = 20; return; }
         Canvas.ForceUpdateCanvases();
-
-        // Get Reference Card Width
         float cardWidth = 0f;
         RectTransform child = container.GetChild(0) as RectTransform;
-        
-        // Fix: Use lockedScale for intended target size if in locked/selected panels to avoid animation jitter
         float contentScale = 1f;
         if (child != null) contentScale = child.localScale.x;
-        
-        if (container == tribeLockedPanel || container == tribeSelectedPanel)
-        {
-            contentScale = lockedScale;
-        }
-
+        if (container == tribeLockedPanel || container == tribeSelectedPanel) { contentScale = lockedScale; }
         if (child != null) cardWidth = child.rect.width * contentScale;
-        if (cardWidth <= 10f) cardWidth = 150f; // Safer hardcoded fallback
-
-        // HARD CONSTRAINT: 
-        // The mat is visually about 950 pixels wide. We MUST fit inside this.
-        float maxVisualWidth = 950f; 
-        
+        if (cardWidth <= 10f) cardWidth = 150f;
+        float maxVisualWidth = 950f;
         float totalCardWidth = count * cardWidth;
-        
-        // Desired equation: totalCardWidth + (count - 1) * spacing <= availableWidth
-        // spacing <= (availableWidth - totalCardWidth) / (count - 1)
-
-        float maxSpacing = tribePanelSpacing; // Use the inspector setting (-90)
+        float maxSpacing = tribePanelSpacing;
         float dynamicSpacing = (maxVisualWidth - totalCardWidth) / (float)(count - 1);
-        
-        // Clamp: Never expand beyond maxSpacing, but allow infinite overlap (negative spacing)
         hlg.spacing = Mathf.Min(maxSpacing, dynamicSpacing);
     }
 }
+

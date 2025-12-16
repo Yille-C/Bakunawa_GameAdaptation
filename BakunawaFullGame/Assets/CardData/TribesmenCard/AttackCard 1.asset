@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 1585840892, guid: 805133993ad0e6d499774019141bc6de, type: 3}
   description: +2 Attack for each different card type played this round.
   effectID: atk_bayanihan
-  lockedArt: {fileID: 949036555, guid: 11dc0fe976de2024dbe9f4347add316b, type: 3}
+  lockedArt: {fileID: -1096275568, guid: 4ac07559983ad054f8cdd9462041ab65, type: 3}

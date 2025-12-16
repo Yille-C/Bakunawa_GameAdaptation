@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -529059968, guid: 3ac3adf217436a9449492840fdf32727, type: 3}
   description: Reduce Enemy Total Atk by 3.
   effectID: def_crushing
-  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
+  lockedArt: {fileID: 2144531961, guid: 4f1d752f3b98580459590705ed3d6379, type: 3}

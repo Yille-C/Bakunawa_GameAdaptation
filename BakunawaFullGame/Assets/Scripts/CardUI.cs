@@ -381,22 +381,32 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     {
         isPressed = false;
 
+        // 1. Handle hiding details (Safe for both modes if checked properly)
         if (detailsShown)
         {
-            if (HandManager.Instance != null) HandManager.Instance.HideCardDetails();
+            if (HandManager.Instance != null)
+                HandManager.Instance.HideCardDetails();
+
+            // If you have a details viewer in Multiplayer, add that check here too
+
             detailsShown = false;
             return;
         }
 
+        // 2. Handle Click (Selection)
         if (pressTimer < holdTimeNeeded && !isDragging)
         {
-            if (HandManager.Instance == null) return;
+            // Check for general restrictions first
             if (isEnemy) return;
             if (isDeckMode) return;
+            if (isLocked) return; // Prevent clicking locked cards in both modes
 
-            if (HandManager.Instance.isPlanningPhase)
+            // --- MODE DETECTION ---
+
+            // A. SINGLE PLAYER
+            if (HandManager.Instance != null)
             {
-                if (!isLocked)
+                if (HandManager.Instance.isPlanningPhase)
                 {
                     bool targetState = !IsSelected;
                     bool success = HandManager.Instance.ToggleCardSelection(this, targetState);
@@ -408,6 +418,13 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
                         if (selectionBorder != null) selectionBorder.SetActive(false);
                     }
                 }
+            }
+            // B. MULTIPLAYER
+            else if (MultiplayerGameManager.Instance != null)
+            {
+                // Pass the click to the multiplayer manager
+                // The Manager will decide if it's the planning phase or if the card can be selected
+                MultiplayerGameManager.Instance.OnCardClicked(this);
             }
         }
     }

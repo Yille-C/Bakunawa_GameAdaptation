@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 5340273, guid: 8e3139c58c44d9c44846bde9ad3808c8, type: 3}
   description: +1 Attack for each Defense card you played this round.
   effectID: atk_daluyon
-  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
+  lockedArt: {fileID: -1157269361, guid: 5e3ba9ee13b72ca4d88335a4e8f49cbf, type: 3}
