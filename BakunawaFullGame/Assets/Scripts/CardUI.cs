@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using System.Collections;
 
 public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -38,6 +39,27 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     [SerializeField] private float selectedScale = 1.1f;
     [SerializeField] private float selectedYOffset = 20f;
     [SerializeField] private float animSpeed = 15f;
+
+    [Header("Drag Flip Animation")]
+    [SerializeField] private float dragLiftScale = 1.15f;
+    [SerializeField] private float dragMaxTiltX = 15f;  // Forward/back tilt based on vertical drag
+    [SerializeField] private float dragMaxTiltY = 20f;  // Side tilt based on horizontal drag
+    [SerializeField] private float dragTiltSpeed = 8f;
+    [SerializeField] private float dragFlipDuration = 0.15f; // Quick lift animation duration
+
+    [Header("Drag Shadow Settings")]
+    [SerializeField] private float shadowBaseOffset = 20f;      // Base shadow offset when lifted
+    [SerializeField] private float shadowTiltMultiplier = 1.5f; // How much tilt affects shadow position
+    [SerializeField] private float shadowBaseAlpha = 0.35f;     // Base shadow opacity
+    [SerializeField] private float shadowScaleMultiplier = 1.08f; // Shadow is slightly larger than card
+
+    // Drag animation state
+    private Vector2 lastDragPosition;
+    private Vector2 dragVelocity;
+    private float currentTiltX = 0f;
+    private float currentTiltY = 0f;
+    private Coroutine liftAnimationCoroutine;
+    private float currentShadowAlpha = 0f;
 
     // Internal Animation State
     private Vector3 baseScale;
@@ -267,11 +289,26 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (dragCanvasGroup == null) dragCanvasGroup = gameObject.AddComponent<CanvasGroup>();
         dragCanvasGroup.blocksRaycasts = false;
 
+        // Switch to normal/full card state (from minimized/locked state)
+        SetLockedState(false);
+
         EnableDragShadow(true);
+
+        // Initialize drag animation state
+        lastDragPosition = eventData.position;
+        dragVelocity = Vector2.zero;
+        currentTiltX = 0f;
+        currentTiltY = 0f;
+
+        // Start lift animation (quick flip effect)
+        if (liftAnimationCoroutine != null) StopCoroutine(liftAnimationCoroutine);
+        liftAnimationCoroutine = StartCoroutine(DragLiftAnimation());
     }
 
     private GameObject dragShadowObject;
-    private Image dragShadowImage;
+    private Image[] shadowLayers; // Multiple layers for soft shadow effect
+    private RectTransform shadowRectTransform;
+    private const int SHADOW_LAYER_COUNT = 3; // Number of shadow layers for softness
 
     void EnableDragShadow(bool enable)
     {
@@ -279,28 +316,104 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         {
             if (dragShadowObject == null)
             {
-                dragShadowObject = new GameObject("DragShadow");
-                dragShadowObject.transform.SetParent(transform, false);
-                dragShadowObject.transform.SetAsFirstSibling();
-
-                dragShadowImage = dragShadowObject.AddComponent<Image>();
-                dragShadowImage.color = new Color(0, 0, 0, 0.5f);
-                dragShadowImage.raycastTarget = false;
-
-                RectTransform shadowRect = dragShadowObject.GetComponent<RectTransform>();
-
-                shadowRect.anchorMin = Vector2.zero;
-                shadowRect.anchorMax = Vector2.one;
-                shadowRect.offsetMin = new Vector2(-5, -5);
-                shadowRect.offsetMax = new Vector2(5, 5);
-
-                shadowRect.anchoredPosition = new Vector2(15, -15);
+                CreateMultiLayerShadow();
             }
             dragShadowObject.SetActive(true);
+            currentShadowAlpha = 0f; // Start faded out, will animate in
         }
         else
         {
             if (dragShadowObject != null) dragShadowObject.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// Creates a multi-layer shadow for a softer, more realistic appearance
+    /// </summary>
+    void CreateMultiLayerShadow()
+    {
+        dragShadowObject = new GameObject("DragShadow");
+        dragShadowObject.transform.SetParent(transform, false);
+        dragShadowObject.transform.SetAsFirstSibling();
+
+        shadowRectTransform = dragShadowObject.AddComponent<RectTransform>();
+        shadowRectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        shadowRectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        shadowRectTransform.pivot = new Vector2(0.5f, 0.5f);
+
+        // Get card size
+        RectTransform cardRect = GetComponent<RectTransform>();
+        float cardWidth = cardRect.rect.width;
+        float cardHeight = cardRect.rect.height;
+
+        shadowLayers = new Image[SHADOW_LAYER_COUNT];
+
+        // Create multiple shadow layers - each progressively larger and more transparent
+        for (int i = 0; i < SHADOW_LAYER_COUNT; i++)
+        {
+            GameObject layerObj = new GameObject($"ShadowLayer_{i}");
+            layerObj.transform.SetParent(dragShadowObject.transform, false);
+
+            Image layerImage = layerObj.AddComponent<Image>();
+            layerImage.raycastTarget = false;
+
+            // Each layer is progressively larger and more transparent
+            float layerScale = shadowScaleMultiplier + (i * 0.04f);
+            float layerAlpha = shadowBaseAlpha / (i + 1); // Decreasing alpha for outer layers
+
+            layerImage.color = new Color(0, 0, 0, layerAlpha);
+
+            RectTransform layerRect = layerObj.GetComponent<RectTransform>();
+            layerRect.anchorMin = new Vector2(0.5f, 0.5f);
+            layerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            layerRect.pivot = new Vector2(0.5f, 0.5f);
+            layerRect.sizeDelta = new Vector2(cardWidth * layerScale, cardHeight * layerScale);
+            layerRect.anchoredPosition = Vector2.zero;
+
+            shadowLayers[i] = layerImage;
+        }
+
+        // Set initial shadow position
+        shadowRectTransform.sizeDelta = new Vector2(cardWidth, cardHeight);
+        shadowRectTransform.anchoredPosition = new Vector2(shadowBaseOffset, -shadowBaseOffset);
+    }
+
+    /// <summary>
+    /// Updates shadow position and appearance based on card tilt and lift state
+    /// </summary>
+    void UpdateDragShadow(float liftProgress = 1f)
+    {
+        if (dragShadowObject == null || !dragShadowObject.activeSelf) return;
+        if (shadowRectTransform == null) return;
+
+        // Calculate shadow offset based on tilt
+        // When card tilts right (positive Y), shadow moves left
+        // When card tilts down (positive X), shadow moves up
+        float tiltOffsetX = -currentTiltY * shadowTiltMultiplier;
+        float tiltOffsetY = currentTiltX * shadowTiltMultiplier;
+
+        // Base offset (light source from top-left)
+        float baseX = shadowBaseOffset * liftProgress;
+        float baseY = -shadowBaseOffset * liftProgress;
+
+        // Apply combined offset
+        shadowRectTransform.anchoredPosition = new Vector2(baseX + tiltOffsetX, baseY + tiltOffsetY);
+
+        // Animate shadow alpha (fade in during lift)
+        float targetAlpha = liftProgress;
+        currentShadowAlpha = Mathf.Lerp(currentShadowAlpha, targetAlpha, Time.deltaTime * 10f);
+
+        // Update shadow layer alphas
+        if (shadowLayers != null)
+        {
+            for (int i = 0; i < shadowLayers.Length; i++)
+            {
+                if (shadowLayers[i] != null)
+                {
+                    float layerAlpha = (shadowBaseAlpha / (i + 1)) * currentShadowAlpha;
+                    shadowLayers[i].color = new Color(0, 0, 0, layerAlpha);
+                }
+            }
         }
     }
 
@@ -324,6 +437,13 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         {
             transform.position = eventData.position;
         }
+
+        // Calculate drag velocity for tilt effect
+        dragVelocity = (eventData.position - lastDragPosition) / Time.deltaTime;
+        lastDragPosition = eventData.position;
+
+        // Apply dynamic tilt based on velocity
+        UpdateDragTilt();
     }
 
     public void OnEndDrag(PointerEventData eventData)
@@ -336,6 +456,16 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (dragCanvasGroup != null) dragCanvasGroup.blocksRaycasts = true;
 
         EnableDragShadow(false);
+
+        // Stop any ongoing lift animation
+        if (liftAnimationCoroutine != null)
+        {
+            StopCoroutine(liftAnimationCoroutine);
+            liftAnimationCoroutine = null;
+        }
+
+        // Reset rotation smoothly
+        StartCoroutine(ResetDragRotation());
 
         bool success = false;
         if (HandManager.Instance != null && HandManager.Instance.battleZone != null)
@@ -352,9 +482,118 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
 
         if (!success)
         {
+            // Drag cancelled - return to original parent and restore locked/minimized state
             transform.SetParent(originalParent);
             transform.SetSiblingIndex(originalSiblingIndex);
+            SetLockedState(true); // Return to minimized state
+            UpdateLockedLayout(); // Restore proper layout settings
         }
+    }
+
+    /// <summary>
+    /// Quick lift animation when starting to drag - gives a satisfying "pickup" feel
+    /// </summary>
+    private IEnumerator DragLiftAnimation()
+    {
+        float elapsed = 0f;
+        Vector3 startScale = transform.localScale;
+        Vector3 targetScale = baseScale * dragLiftScale;
+
+        // First half: Scale up and rotate slightly (like lifting the card)
+        while (elapsed < dragFlipDuration * 0.5f)
+        {
+            float t = elapsed / (dragFlipDuration * 0.5f);
+            t = t * t * (3f - 2f * t); // Smooth step
+
+            transform.localScale = Vector3.Lerp(startScale, targetScale, t);
+
+            // Slight Y rotation for flip effect (0 -> 15 degrees)
+            float yRot = Mathf.Lerp(0f, 15f, t);
+            transform.localRotation = Quaternion.Euler(currentTiltX, yRot, 0f);
+
+            // Update shadow with lift progress
+            UpdateDragShadow(t);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Second half: Rotate back and settle at drag scale
+        elapsed = 0f;
+        while (elapsed < dragFlipDuration * 0.5f)
+        {
+            float t = elapsed / (dragFlipDuration * 0.5f);
+            t = t * t * (3f - 2f * t); // Smooth step
+
+            // Y rotation back (15 -> 0 degrees)
+            float yRot = Mathf.Lerp(15f, 0f, t);
+            transform.localRotation = Quaternion.Euler(currentTiltX, yRot, 0f);
+
+            // Shadow fully visible in second half
+            UpdateDragShadow(1f);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.localScale = targetScale;
+        liftAnimationCoroutine = null;
+    }
+
+    /// <summary>
+    /// Updates card tilt based on drag velocity for a dynamic 3D feel
+    /// </summary>
+    private void UpdateDragTilt()
+    {
+        // Calculate target tilt based on velocity
+        // Horizontal velocity -> Y-axis tilt (card tilts in direction of movement)
+        // Vertical velocity -> X-axis tilt (card tilts forward/back)
+        float targetTiltY = Mathf.Clamp(-dragVelocity.x * 0.02f, -dragMaxTiltY, dragMaxTiltY);
+        float targetTiltX = Mathf.Clamp(dragVelocity.y * 0.015f, -dragMaxTiltX, dragMaxTiltX);
+
+        // Smooth the tilt
+        currentTiltY = Mathf.Lerp(currentTiltY, targetTiltY, Time.deltaTime * dragTiltSpeed);
+        currentTiltX = Mathf.Lerp(currentTiltX, targetTiltX, Time.deltaTime * dragTiltSpeed);
+
+        // Apply rotation (only if lift animation is done)
+        if (liftAnimationCoroutine == null)
+        {
+            transform.localRotation = Quaternion.Euler(currentTiltX, currentTiltY, 0f);
+        }
+
+        // Update shadow to follow tilt
+        UpdateDragShadow(1f);
+    }
+
+    /// <summary>
+    /// Smoothly resets the card rotation when drag ends
+    /// </summary>
+    private IEnumerator ResetDragRotation()
+    {
+        Quaternion startRot = transform.localRotation;
+        Quaternion targetRot = Quaternion.identity;
+        Vector3 startScale = transform.localScale;
+        Vector3 targetScale = baseScale * (HandManager.Instance != null ? HandManager.Instance.lockedScale : 1f);
+
+        float duration = 0.2f;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            float t = elapsed / duration;
+            t = t * t * (3f - 2f * t); // Smooth step
+
+            transform.localRotation = Quaternion.Lerp(startRot, targetRot, t);
+            transform.localScale = Vector3.Lerp(startScale, targetScale, t);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.localRotation = targetRot;
+        transform.localScale = targetScale;
+        currentTiltX = 0f;
+        currentTiltY = 0f;
     }
 
     // --- Hover Handling ---
