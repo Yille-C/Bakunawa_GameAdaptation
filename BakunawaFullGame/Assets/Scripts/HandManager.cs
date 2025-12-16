@@ -1815,6 +1815,12 @@ public class HandManager : MonoBehaviour
     }
     void CreateImpactSparks(Vector3 pos)
     {
+        // Trigger bloom spike for post-processing glow
+        if (ClashBloomController.Instance != null)
+        {
+            ClashBloomController.Instance.TriggerClashBloom();
+        }
+        
         // 1. Container
         GameObject container = new GameObject("SparkContainer");
         container.transform.position = pos;
@@ -1834,40 +1840,135 @@ public class HandManager : MonoBehaviour
         sparkCanvas.sortingOrder = 2001; // Above cards (2000)
         container.AddComponent<GraphicRaycaster>();
 
-        // 2. Spawn Sprites
-        int sparkCount = 20;
+        // Try to get HDR glow material for sparks
+        Material hdrGlowMat = null;
+        Shader hdrShader = Shader.Find("UI/HDRGlow");
+        if (hdrShader != null)
+        {
+            hdrGlowMat = new Material(hdrShader);
+            hdrGlowMat.SetFloat("_GlowIntensity", 4f);
+            hdrGlowMat.SetFloat("_GlowFalloff", 1.5f);
+        }
+
+        // 3. Spawn GLOWING Sprites with HDR materials
+        int sparkCount = 24;
         List<RectTransform> sparks = new List<RectTransform>();
+        List<Image> sparkImages = new List<Image>();
         List<Vector2> velocities = new List<Vector2>();
+        List<Image> glowHalos = new List<Image>();
+        
+        // Fallback texture for non-HDR path
+        Texture2D fallbackGlowTex = null;
+        if (hdrGlowMat == null)
+        {
+            fallbackGlowTex = CreateGlowTexture(64);
+        }
 
         for(int i=0; i<sparkCount; i++)
         {
+            // Bright glowing colors
+            float rVal = Random.value;
+            Color sparkColor;
+            if (rVal > 0.6f) sparkColor = new Color(1f, 1f, 0.7f); // Bright white-yellow
+            else if (rVal > 0.3f) sparkColor = new Color(1f, 0.85f, 0.2f); // Bright gold
+            else sparkColor = new Color(1f, 0.5f, 0.1f); // Hot orange
+            
+            // Create GLOW HALO behind the spark
+            GameObject halo = new GameObject("Halo");
+            halo.transform.SetParent(container.transform);
+            halo.transform.position = pos;
+            halo.transform.localScale = Vector3.one;
+            
+            Image haloImg = halo.AddComponent<Image>();
+            
+            // Use HDR material for halo
+            if (hdrGlowMat != null)
+            {
+                Material haloMat = new Material(hdrGlowMat);
+                haloMat.SetColor("_Color", sparkColor);
+                haloMat.SetFloat("_GlowIntensity", 3f); // Softer glow for halo
+                haloImg.material = haloMat;
+                haloImg.color = new Color(1f, 1f, 1f, 0.6f);
+            }
+            else
+            {
+                haloImg.sprite = Sprite.Create(fallbackGlowTex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
+                haloImg.color = new Color(sparkColor.r, sparkColor.g, sparkColor.b, 0.4f);
+            }
+            
+            // Create the SPARK on top
             GameObject s = new GameObject("Spark");
             s.transform.SetParent(container.transform);
-            s.transform.position = pos; // Start at center
+            s.transform.position = pos;
             s.transform.localScale = Vector3.one;
             
             Image img = s.AddComponent<Image>();
-            // Gold / bright orange / white mix
-            float rVal = Random.value;
-            if (rVal > 0.6f) img.color = new Color(1f, 0.9f, 0.4f); // Pale Gold
-            else if (rVal > 0.3f) img.color = new Color(1f, 0.6f, 0.1f); // Orange
-            else img.color = Color.white; // Sparkle center
+            
+            // Use HDR material for spark
+            if (hdrGlowMat != null)
+            {
+                Material sparkMat = new Material(hdrGlowMat);
+                sparkMat.SetColor("_Color", sparkColor);
+                sparkMat.SetFloat("_GlowIntensity", 5f); // Bright spark core
+                sparkMat.SetFloat("_GlowFalloff", 2f); // Sharper falloff
+                img.material = sparkMat;
+                img.color = Color.white;
+            }
+            else
+            {
+                img.color = sparkColor;
+            }
             
             // Random direction
             Vector2 dir = Random.insideUnitCircle.normalized;
-            float speed = Random.Range(300f, 800f); // High speed for screen space
+            float speed = Random.Range(400f, 1000f); // Faster for more energy
             velocities.Add(dir * speed);
 
             RectTransform rt = s.GetComponent<RectTransform>();
-            float size = Random.Range(10f, 30f);
+            RectTransform haloRT = halo.GetComponent<RectTransform>();
+            
+            float size = Random.Range(8f, 24f);
             rt.sizeDelta = new Vector2(size, size);
+            haloRT.sizeDelta = new Vector2(size * 3f, size * 3f); // Halo is 3x bigger
+            
             sparks.Add(rt);
+            sparkImages.Add(img);
+            glowHalos.Add(haloImg);
         }
 
-        StartCoroutine(AnimateUIExplosion(container, sparks, velocities));
+        StartCoroutine(AnimateSparksExplosion(container, sparks, sparkImages, glowHalos, velocities));
+    }
+    
+    Texture2D CreateGlowTexture(int size)
+    {
+        Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color[] pixels = new Color[size * size];
+        float center = size / 2f;
+        
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float dx = (x - center) / center;
+                float dy = (y - center) / center;
+                float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                
+                // Radial gradient: bright center, fading out
+                float alpha = Mathf.Clamp01(1f - dist);
+                alpha = Mathf.Pow(alpha, 1.5f); // Softer falloff
+                
+                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+            }
+        }
+        
+        tex.SetPixels(pixels);
+        tex.Apply();
+        tex.filterMode = FilterMode.Bilinear;
+        return tex;
     }
 
-    IEnumerator AnimateUIExplosion(GameObject container, List<RectTransform> sparks, List<Vector2> velocities)
+    IEnumerator AnimateSparksExplosion(GameObject container, List<RectTransform> sparks, 
+        List<Image> sparkImages, List<Image> glowHalos, List<Vector2> velocities)
     {
         float duration = 0.5f;
         float elapsed = 0f;
@@ -1875,27 +1976,48 @@ public class HandManager : MonoBehaviour
         while(elapsed < duration && container != null)
         {
             float t = elapsed / duration;
+            
             for(int i=0; i<sparks.Count; i++)
             {
                 if(sparks[i] == null) continue;
                 
-                // Move
+                // Move spark
                 sparks[i].anchoredPosition += velocities[i] * Time.deltaTime;
+                
+                // Move halo with spark
+                if (i < glowHalos.Count && glowHalos[i] != null)
+                {
+                    RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>();
+                    if (haloRT != null)
+                        haloRT.anchoredPosition = sparks[i].anchoredPosition;
+                }
                 
                 // Slow down (Drag)
                 velocities[i] = Vector2.Lerp(velocities[i], Vector2.zero, Time.deltaTime * 5f);
                 
-                // Find Image to Fade
-                Image img = sparks[i].GetComponent<Image>();
-                if (img != null)
+                // Fade spark and halo
+                float fadeT = t * t; // Quadratic fade
+                if (sparkImages[i] != null)
                 {
-                    Color c = img.color;
-                    c.a = Mathf.Lerp(1f, 0f, t * t); // Fade out quadratic
-                    img.color = c;
+                    Color c = sparkImages[i].color;
+                    c.a = Mathf.Lerp(1f, 0f, fadeT);
+                    sparkImages[i].color = c;
+                }
+                if (i < glowHalos.Count && glowHalos[i] != null)
+                {
+                    Color c = glowHalos[i].color;
+                    c.a = Mathf.Lerp(0.5f, 0f, fadeT);
+                    glowHalos[i].color = c;
                 }
                 
                 // Shrink
                 sparks[i].localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+                if (i < glowHalos.Count && glowHalos[i] != null)
+                {
+                    RectTransform haloRT = glowHalos[i].GetComponent<RectTransform>();
+                    if (haloRT != null)
+                        haloRT.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+                }
             }
             elapsed += Time.deltaTime;
             yield return null;
