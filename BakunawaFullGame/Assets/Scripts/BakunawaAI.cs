@@ -178,6 +178,13 @@ public class BakunawaAI : MonoBehaviour
 
     public IEnumerator AnimateCurveToBoard(CardUI card, float duration = 0.5f)
     {
+        // Enable shadow while card is "in flight"
+        GameObject shadow = CreateCardShadow(card);
+        
+        // First: FLIP ANIMATION to reveal the card
+        yield return StartCoroutine(AnimateCardFlip(card, 0.4f));
+        
+        // Then: CURVE ANIMATION to move to board
         Vector3 startPos = card.transform.position;
         Quaternion startRot = card.transform.rotation;
         
@@ -195,6 +202,17 @@ public class BakunawaAI : MonoBehaviour
             card.transform.position = Vector3.Lerp(startPos, targetPos, t);
             card.transform.rotation = Quaternion.Lerp(startRot, targetRot, t);
             
+            // Fade out shadow as card lands
+            if (shadow != null)
+            {
+                Image shadowImg = shadow.GetComponent<Image>();
+                if (shadowImg != null)
+                {
+                    float alpha = Mathf.Lerp(0.5f, 0f, t);
+                    shadowImg.color = new Color(0, 0, 0, alpha);
+                }
+            }
+            
             elapsed += Time.deltaTime;
             yield return null;
         }
@@ -202,9 +220,110 @@ public class BakunawaAI : MonoBehaviour
         card.transform.rotation = targetRot;
         card.transform.localPosition = Vector3.zero; // Ensure centered locally
 
+        // Disable shadow
+        if (shadow != null) Destroy(shadow);
+
         // Keep ignoreLayout TRUE - clash animation will handle final positioning
         LayoutElement le = card.GetComponent<LayoutElement>();
         if (le != null) le.ignoreLayout = true;
+    }
+    
+    /// <summary>
+    /// Creates a shadow GameObject for a card
+    /// </summary>
+    GameObject CreateCardShadow(CardUI card)
+    {
+        if (card == null) return null;
+        
+        GameObject shadowObj = new GameObject("PlayShadow");
+        shadowObj.transform.SetParent(card.transform, false);
+        shadowObj.transform.SetAsFirstSibling(); // Behind card content
+        
+        Image shadowImg = shadowObj.AddComponent<Image>();
+        shadowImg.color = new Color(0, 0, 0, 0.5f);
+        shadowImg.raycastTarget = false;
+        
+        RectTransform shadowRect = shadowObj.GetComponent<RectTransform>();
+        shadowRect.anchorMin = Vector2.zero;
+        shadowRect.anchorMax = Vector2.one;
+        shadowRect.offsetMin = new Vector2(-5, -5);
+        shadowRect.offsetMax = new Vector2(5, 5);
+        shadowRect.anchoredPosition = new Vector2(15, -15); // Offset for shadow effect
+        
+        return shadowObj;
+    }
+    
+    /// <summary>
+    /// Animates a card flipping from back to front (Y-axis rotation)
+    /// </summary>
+    public IEnumerator AnimateCardFlip(CardUI card, float duration = 0.4f)
+    {
+        if (card == null) yield break;
+        
+        float elapsed = 0f;
+        float halfDuration = duration * 0.5f;
+        
+        // Store original rotation
+        Quaternion baseRotation = card.transform.rotation;
+        Vector3 baseEuler = baseRotation.eulerAngles;
+        
+        // Card starts face-down (showing back)
+        bool hasFlipped = false;
+        
+        // Scale punch for impact
+        Vector3 originalScale = card.transform.localScale;
+        
+        while (elapsed < duration)
+        {
+            float t = elapsed / duration;
+            
+            // Y-axis rotation: 0 -> 90 -> 180 (but we show front at 90)
+            float yRotation;
+            
+            if (t < 0.5f)
+            {
+                // First half: 0 -> 90 degrees
+                float halfT = t / 0.5f;
+                yRotation = Mathf.Lerp(0, 90f, halfT);
+            }
+            else
+            {
+                // Second half: 90 -> 0 degrees (but card is now flipped visually)
+                float halfT = (t - 0.5f) / 0.5f;
+                yRotation = Mathf.Lerp(90f, 0f, halfT);
+            }
+            
+            // Flip the card visuals at the halfway point (when it's edge-on)
+            if (!hasFlipped && elapsed >= halfDuration)
+            {
+                hasFlipped = true;
+                // Switch from back to front
+                card.SwitchToDeckMode(false); // Show front
+                card.SetLockedState(false);
+            }
+            
+            // Apply rotation
+            card.transform.rotation = Quaternion.Euler(baseEuler.x, yRotation, baseEuler.z);
+            
+            // Slight scale punch at the flip moment
+            if (t > 0.4f && t < 0.6f)
+            {
+                float punch = 1f + 0.1f * Mathf.Sin((t - 0.4f) / 0.2f * Mathf.PI);
+                card.transform.localScale = originalScale * punch;
+            }
+            else
+            {
+                card.transform.localScale = originalScale;
+            }
+            
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        
+        // Ensure final state
+        card.transform.rotation = Quaternion.Euler(baseEuler.x, 0, baseEuler.z);
+        card.transform.localScale = originalScale;
+        card.SwitchToDeckMode(false);
     }
 
     public void CleanupRound()
