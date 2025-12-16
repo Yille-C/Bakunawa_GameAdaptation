@@ -51,7 +51,7 @@ public class BakunawaAI : MonoBehaviour
             hlg.childForceExpandWidth = false;
             hlg.childForceExpandHeight = false;
             hlg.padding = new RectOffset(50, 0, 0, 0);
-            hlg.spacing = 20; 
+            hlg.spacing = 20;
         }
     }
 
@@ -124,6 +124,16 @@ public class BakunawaAI : MonoBehaviour
         foreach (CardUI card in myLockedCards)
         {
             card.transform.SetParent(lockedArea);
+
+            // --- FIX: RESET POSITION AND LAYOUT ---
+            // This ensures the card snaps into the HorizontalLayoutGroup immediately
+            card.transform.localPosition = Vector3.zero;
+            card.transform.localRotation = Quaternion.identity;
+
+            LayoutElement le = card.GetComponent<LayoutElement>();
+            if (le != null) le.ignoreLayout = false;
+            // --------------------------------------
+
             card.SetLockedState(true);
             // Apply locked scale to match player's card size
             card.transform.localScale = new Vector3(lockedScale, lockedScale, lockedScale);
@@ -153,7 +163,7 @@ public class BakunawaAI : MonoBehaviour
         Vector3 startPos = cardToPlay.transform.position;
 
         cardToPlay.transform.SetParent(battleZone);
-        
+
         // Setup for Animation: maintain position, ignore layout for now
         LayoutElement le = cardToPlay.GetComponent<LayoutElement>();
         if (le == null) le = cardToPlay.gameObject.AddComponent<LayoutElement>();
@@ -180,14 +190,14 @@ public class BakunawaAI : MonoBehaviour
     {
         // Enable shadow while card is "in flight"
         GameObject shadow = CreateCardShadow(card);
-        
+
         // First: FLIP ANIMATION to reveal the card
         yield return StartCoroutine(AnimateCardFlip(card, 0.4f));
-        
+
         // Then: CURVE ANIMATION to move to board
         Vector3 startPos = card.transform.position;
         Quaternion startRot = card.transform.rotation;
-        
+
         // Target is CENTER of battle zone
         Vector3 targetPos = battleZone.position;
         Quaternion targetRot = Quaternion.identity;
@@ -201,7 +211,7 @@ public class BakunawaAI : MonoBehaviour
 
             card.transform.position = Vector3.Lerp(startPos, targetPos, t);
             card.transform.rotation = Quaternion.Lerp(startRot, targetRot, t);
-            
+
             // Fade out shadow as card lands
             if (shadow != null)
             {
@@ -212,7 +222,7 @@ public class BakunawaAI : MonoBehaviour
                     shadowImg.color = new Color(0, 0, 0, alpha);
                 }
             }
-            
+
             elapsed += Time.deltaTime;
             yield return null;
         }
@@ -227,59 +237,59 @@ public class BakunawaAI : MonoBehaviour
         LayoutElement le = card.GetComponent<LayoutElement>();
         if (le != null) le.ignoreLayout = true;
     }
-    
+
     /// <summary>
     /// Creates a shadow GameObject for a card
     /// </summary>
     GameObject CreateCardShadow(CardUI card)
     {
         if (card == null) return null;
-        
+
         GameObject shadowObj = new GameObject("PlayShadow");
         shadowObj.transform.SetParent(card.transform, false);
         shadowObj.transform.SetAsFirstSibling(); // Behind card content
-        
+
         Image shadowImg = shadowObj.AddComponent<Image>();
         shadowImg.color = new Color(0, 0, 0, 0.5f);
         shadowImg.raycastTarget = false;
-        
+
         RectTransform shadowRect = shadowObj.GetComponent<RectTransform>();
         shadowRect.anchorMin = Vector2.zero;
         shadowRect.anchorMax = Vector2.one;
         shadowRect.offsetMin = new Vector2(-5, -5);
         shadowRect.offsetMax = new Vector2(5, 5);
         shadowRect.anchoredPosition = new Vector2(15, -15); // Offset for shadow effect
-        
+
         return shadowObj;
     }
-    
+
     /// <summary>
     /// Animates a card flipping from back to front (Y-axis rotation)
     /// </summary>
     public IEnumerator AnimateCardFlip(CardUI card, float duration = 0.4f)
     {
         if (card == null) yield break;
-        
+
         float elapsed = 0f;
         float halfDuration = duration * 0.5f;
-        
+
         // Store original rotation
         Quaternion baseRotation = card.transform.rotation;
         Vector3 baseEuler = baseRotation.eulerAngles;
-        
+
         // Card starts face-down (showing back)
         bool hasFlipped = false;
-        
+
         // Scale punch for impact
         Vector3 originalScale = card.transform.localScale;
-        
+
         while (elapsed < duration)
         {
             float t = elapsed / duration;
-            
+
             // Y-axis rotation: 0 -> 90 -> 180 (but we show front at 90)
             float yRotation;
-            
+
             if (t < 0.5f)
             {
                 // First half: 0 -> 90 degrees
@@ -292,7 +302,7 @@ public class BakunawaAI : MonoBehaviour
                 float halfT = (t - 0.5f) / 0.5f;
                 yRotation = Mathf.Lerp(90f, 0f, halfT);
             }
-            
+
             // Flip the card visuals at the halfway point (when it's edge-on)
             if (!hasFlipped && elapsed >= halfDuration)
             {
@@ -301,10 +311,10 @@ public class BakunawaAI : MonoBehaviour
                 card.SwitchToDeckMode(false); // Show front
                 card.SetLockedState(false);
             }
-            
+
             // Apply rotation
             card.transform.rotation = Quaternion.Euler(baseEuler.x, yRotation, baseEuler.z);
-            
+
             // Slight scale punch at the flip moment
             if (t > 0.4f && t < 0.6f)
             {
@@ -315,11 +325,11 @@ public class BakunawaAI : MonoBehaviour
             {
                 card.transform.localScale = originalScale;
             }
-            
+
             elapsed += Time.deltaTime;
             yield return null;
         }
-        
+
         // Ensure final state
         card.transform.rotation = Quaternion.Euler(baseEuler.x, 0, baseEuler.z);
         card.transform.localScale = originalScale;

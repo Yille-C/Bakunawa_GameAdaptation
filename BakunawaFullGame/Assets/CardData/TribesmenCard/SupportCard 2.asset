@@ -21,3 +21,4 @@ MonoBehaviour:
   description: 'Pick a Card effect: +4 Attack to all your cards OR Reduce Enemy Attack
     by 6.'
   effectID: sup_alay
+  lockedArt: {fileID: -1505151642, guid: bec6392abddfaca4cb582dbd01621dcd, type: 3}

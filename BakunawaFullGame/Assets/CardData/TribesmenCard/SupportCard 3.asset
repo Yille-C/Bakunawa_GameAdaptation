@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 252390960, guid: ba960cade549b164f909d7647a47120c, type: 3}
   description: If 3+ cards played, +1 Atk per card.
   effectID: sup_kudyapi
+  lockedArt: {fileID: -1478909326, guid: 953964728d8c57e419147359d21d7814, type: 3}

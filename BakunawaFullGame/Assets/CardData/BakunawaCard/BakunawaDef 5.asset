@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 821251743, guid: 4c34d95a847bc614ab7981e310fce698, type: 3}
   description: Reduce Enemy Total Atk by 2.
   effectID: def_evasive
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

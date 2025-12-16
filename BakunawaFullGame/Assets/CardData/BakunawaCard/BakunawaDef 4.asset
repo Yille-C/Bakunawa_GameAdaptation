@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 1894047148, guid: 88392a37d9c1aac4e8c66be3860edfc0, type: 3}
   description: Reduce Enemy Total Atk by 1.
   effectID: def_dragon
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

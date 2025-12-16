@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 282692088, guid: b55ba80ea516e3846afc6506558da22f, type: 3}
   description: +3 Attack if any Support card was played this round.
   effectID: atk_spear
+  lockedArt: {fileID: 1186064958, guid: a1ca4d0f80963e34b9d5a6ac5d8fea85, type: 3}

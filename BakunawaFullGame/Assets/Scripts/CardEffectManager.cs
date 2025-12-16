@@ -79,7 +79,7 @@ public class CardEffectManager : MonoBehaviour
                     break;
                 case "sup_elder": currentBuff = 2; break;
                 case "sup_gabayan":
-                    if (BakunawaAI.Instance != null) BakunawaAI.Instance.RevealCards();
+                    if (BakunawaAI.Instance != null) BakunawaAI.Instance.RevealLockedCards();
                     break;
 
                 // BAKUNAWA CARDS

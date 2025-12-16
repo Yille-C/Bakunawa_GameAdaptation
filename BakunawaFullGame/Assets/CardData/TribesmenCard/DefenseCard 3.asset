@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -931464859, guid: 22c46a71ebb034a4ba9e7c07f893f7c3, type: 3}
   description: Reduce Enemy Total Atk by 1 per card played.
   effectID: def_sigaw
+  lockedArt: {fileID: -896481972, guid: fd36498394001d044b75c17c69e44605, type: 3}

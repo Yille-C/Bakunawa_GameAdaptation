@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -137197479, guid: afbc5c4c4e8318a45b3f50d24a10cac2, type: 3}
   description: The next 2 cards played get +2 Atk each.
   effectID: sup_ocean
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

@@ -20,3 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 2026757929, guid: 73bbab612616ea243878634c2c6ddfb2, type: 3}
   description: Reveal opponent hand
   effectID: sup_gabayan
+  lockedArt: {fileID: -617729389, guid: 9ded7736db94a26449c1e075c7664f82, type: 3}

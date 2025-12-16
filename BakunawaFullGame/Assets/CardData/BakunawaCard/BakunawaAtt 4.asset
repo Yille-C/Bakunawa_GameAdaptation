@@ -21,3 +21,4 @@ MonoBehaviour:
   description: +1 Attack for each card opponent played before this one in the current
     round.
   effectID: atk_serpent
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
