@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using System.Collections;
 
@@ -793,6 +794,21 @@ public class HandManager : MonoBehaviour
             {
                 currentTimer = 0;
                 OnLockInPressed();
+            }
+            
+            // Keyboard shortcuts for hand pagination
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.eKey.wasPressedThisFrame)
+                {
+                    NextHandPage();
+                    if (UIAudioManager.Instance != null) UIAudioManager.Instance.PlayClickSound();
+                }
+                if (Keyboard.current.qKey.wasPressedThisFrame)
+                {
+                    PrevHandPage();
+                    if (UIAudioManager.Instance != null) UIAudioManager.Instance.PlayClickSound();
+                }
             }
         }
     }

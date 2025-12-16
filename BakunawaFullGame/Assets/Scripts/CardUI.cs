@@ -36,6 +36,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
 
     [Header("Audio")]
     [SerializeField] private AudioClip flipCardSound;
+    [SerializeField] private AudioClip hoverCardSound;
     private AudioSource audioSource;
 
     [Header("Animation Settings")]
@@ -384,6 +385,17 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         audioSource.PlayOneShot(flipCardSound);
     }
 
+    /// <summary>
+    /// Plays the hover card sound effect when hovering over a card in hand
+    /// </summary>
+    private void PlayHoverSound()
+    {
+        if (hoverCardSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(hoverCardSound);
+        }
+    }
+
     private GameObject dragShadowObject;
     private Image[] shadowLayers; // Multiple layers for soft shadow effect
     private RectTransform shadowRectTransform;
@@ -680,6 +692,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     {
         if (!enabled || isEnemy || isDeckMode || isLocked) return;
         isHovered = true;
+        PlayHoverSound();
     }
 
     public void OnPointerExit(PointerEventData eventData)
