@@ -249,6 +249,52 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         dragCanvasGroup = GetComponent<CanvasGroup>();
         if (dragCanvasGroup == null) dragCanvasGroup = gameObject.AddComponent<CanvasGroup>();
         dragCanvasGroup.blocksRaycasts = false;
+        
+        // Add prominent drop shadow while dragging
+        EnableDragShadow(true);
+    }
+    
+    // Shadow GameObject for drag effect
+    private GameObject dragShadowObject;
+    private Image dragShadowImage;
+    
+    void EnableDragShadow(bool enable)
+    {
+        if (enable)
+        {
+            // Create shadow object if it doesn't exist
+            if (dragShadowObject == null)
+            {
+                dragShadowObject = new GameObject("DragShadow");
+                dragShadowObject.transform.SetParent(transform, false);
+                dragShadowObject.transform.SetAsFirstSibling(); // Behind everything else
+                
+                dragShadowImage = dragShadowObject.AddComponent<Image>();
+                dragShadowImage.color = new Color(0, 0, 0, 0.5f); // Semi-transparent black
+                dragShadowImage.raycastTarget = false;
+                
+                // Match card size
+                RectTransform shadowRect = dragShadowObject.GetComponent<RectTransform>();
+                RectTransform cardRect = GetComponent<RectTransform>();
+                
+                shadowRect.anchorMin = Vector2.zero;
+                shadowRect.anchorMax = Vector2.one;
+                shadowRect.offsetMin = new Vector2(-5, -5); // Slightly larger than card
+                shadowRect.offsetMax = new Vector2(5, 5);
+                
+                // Offset for shadow effect
+                shadowRect.anchoredPosition = new Vector2(15, -15); // Offset right and down
+            }
+            
+            dragShadowObject.SetActive(true);
+        }
+        else
+        {
+            if (dragShadowObject != null)
+            {
+                dragShadowObject.SetActive(false);
+            }
+        }
     }
 
     public void OnDrag(PointerEventData eventData)
@@ -286,6 +332,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         if (layoutElement != null) layoutElement.ignoreLayout = false;
 
         if (dragCanvasGroup != null) dragCanvasGroup.blocksRaycasts = true;
+        
+        // Remove drag shadow
+        EnableDragShadow(false);
 
         // Check if dropped on BattleZone
         bool success = false;
