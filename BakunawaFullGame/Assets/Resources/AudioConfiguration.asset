@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce05d1f2d9b1645469fe8e5e7f35bdcb, type: 3}
+  m_Name: AudioConfiguration
+  m_EditorClassIdentifier: Assembly-CSharp::AudioConfiguration
+  audioClips:
+  - clip: {fileID: 8300000, guid: 5b8d048ad8f9a8441bdf05b67ffc8760, type: 3}
+    category: 1
+    path: Assets/Audio/big-thunder-clap-99753.mp3
+  - clip: {fileID: 8300000, guid: 5c3f58cfe36b06c45a2e7b9c731e7c15, type: 3}
+    category: 0
+    path: Assets/Audio/cardsound32562-37691.mp3
+  - clip: {fileID: 8300000, guid: f93b8574ba4b5a1429cc9ea21a43e940, type: 3}
+    category: 1
+    path: Assets/Audio/BGM 2.mp3
+  - clip: {fileID: 8300000, guid: c203e7d19fab9ba4299278a80ad365e8, type: 3}
+    category: 0
+    path: Assets/Audio/discard-pile.wav
+  - clip: {fileID: 8300000, guid: 4e64c058243e3754b94fec457b6b60d4, type: 3}
+    category: 0
+    path: Assets/Audio/discard-pile-1.wav
+  - clip: {fileID: 8300000, guid: 189dc02bda3227445814238ba8494f59, type: 3}
+    category: 1
+    path: Assets/Audio/dry-thunder.mp3
+  - clip: {fileID: 8300000, guid: d8daff297ce56cc479413471c6cc9371, type: 3}
+    category: 0
+    path: Assets/Audio/flip-card.mp3
+  - clip: {fileID: 8300000, guid: 6abe50739b3fd1642a7ff8ebe63297af, type: 3}
+    category: 0
+    path: Assets/Audio/hover-card.wav
+  - clip: {fileID: 8300000, guid: 58d1dca0e43af4a488241190b21a5ff2, type: 3}
+    category: 1
+    path: Assets/Audio/rain.mp3
+  - clip: {fileID: 8300000, guid: 897957eb140f8f24db7e532ba5956fbe, type: 3}
+    category: 1
+    path: Assets/Audio/thunder.mp3
+  - clip: {fileID: 8300000, guid: bdcb62c3bda8e6d458b651abe9d0deac, type: 3}
+    category: 1
+    path: Assets/Audio/thunder-big-30291.mp3
+  - clip: {fileID: 8300000, guid: 2df2f6b0eb0a52b47bf0c4a32581f1f6, type: 3}
+    category: 2
+    path: Assets/Audio/ui-button-click.mp3

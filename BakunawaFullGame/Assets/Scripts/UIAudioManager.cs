@@ -108,6 +108,7 @@ public class UIAudioManager : MonoBehaviour
         button.onClick.AddListener(PlayClickSound);
     }
     
+    
     /// <summary>
     /// Plays the button click sound
     /// </summary>
@@ -115,7 +116,7 @@ public class UIAudioManager : MonoBehaviour
     {
         if (buttonClickSound != null && audioSource != null)
         {
-            audioSource.PlayOneShot(buttonClickSound, clickVolume);
+            audioSource.PlayOneShot(buttonClickSound, clickVolume * volumeMultiplier);
         }
     }
     
@@ -126,7 +127,7 @@ public class UIAudioManager : MonoBehaviour
     {
         if (buttonHoverSound != null && audioSource != null)
         {
-            audioSource.PlayOneShot(buttonHoverSound, hoverVolume);
+            audioSource.PlayOneShot(buttonHoverSound, hoverVolume * volumeMultiplier);
         }
     }
     
@@ -137,7 +138,25 @@ public class UIAudioManager : MonoBehaviour
     {
         if (clip != null && audioSource != null)
         {
-            audioSource.PlayOneShot(clip, volume);
+            audioSource.PlayOneShot(clip, volume * volumeMultiplier);
         }
+    }
+    
+    private float volumeMultiplier = 1f;
+    
+    /// <summary>
+    /// Sets the volume multiplier for all UI sounds
+    /// </summary>
+    public void SetVolume(float volume)
+    {
+        volumeMultiplier = Mathf.Clamp01(volume);
+    }
+    
+    /// <summary>
+    /// Gets the current volume multiplier
+    /// </summary>
+    public float GetVolume()
+    {
+        return volumeMultiplier;
     }
 }

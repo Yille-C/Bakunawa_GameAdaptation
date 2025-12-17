@@ -212,7 +212,35 @@ public class GameAudioManager : MonoBehaviour
     public void PlaySFX(AudioClip clip, float volume = 1f)
     {
         if (clip == null || sfxSource == null) return;
-        sfxSource.PlayOneShot(clip, volume);
+        sfxSource.PlayOneShot(clip, volume * sfxVolumeMultiplier);
+    }
+    
+    private float sfxVolumeMultiplier = 1f;
+    private float musicVolumeMultiplier = 1f;
+    
+    /// <summary>
+    /// Sets the music volume multiplier (affects BGM and ambient)
+    /// </summary>
+    public void SetMusicVolume(float volume)
+    {
+        musicVolumeMultiplier = Mathf.Clamp01(volume);
+        
+        // Apply to BGM
+        if (bgmSource != null) 
+            bgmSource.volume = bgmVolume * musicVolumeMultiplier;
+        
+        // Apply to Ambient
+        if (ambientSource != null)
+            ambientSource.volume = rainVolume * musicVolumeMultiplier;
+    }
+    
+    /// <summary>
+    /// Sets the SFX volume multiplier
+    /// </summary>
+    public void SetSFXVolume(float volume)
+    {
+        sfxVolumeMultiplier = Mathf.Clamp01(volume);
+        // SFX volume is applied when sounds are played via PlaySFX
     }
     
     #endregion

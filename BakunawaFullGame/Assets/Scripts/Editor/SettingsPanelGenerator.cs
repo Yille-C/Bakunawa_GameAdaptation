@@ -12,7 +12,7 @@ public class SettingsPanelGenerator : EditorWindow
 {
     private Transform parentTransform;
     private TMP_FontAsset customFont;
-    private Vector2 panelSize = new Vector2(600, 500);
+    private Vector2 panelSize = new Vector2(600, 650);
     private Color panelColor = new Color(0.1f, 0.1f, 0.15f, 0.95f);
     private Color headerColor = new Color(0.8f, 0.6f, 0.2f, 1f);
     private Color textColor = new Color(0.9f, 0.9f, 0.9f, 1f);
@@ -87,8 +87,20 @@ public class SettingsPanelGenerator : EditorWindow
         // Header
         CreateHeader(panelObj.transform, "SETTINGS");
         
-        // Volume Row
-        CreateVolumeRow(panelObj.transform);
+        // Audio Section Header
+        CreateSectionHeader(panelObj.transform, "Audio");
+        
+        // Master Volume Row
+        CreateVolumeRow(panelObj.transform, "Master", "MasterVolume");
+        
+        // Music Volume Row
+        CreateVolumeRow(panelObj.transform, "Music", "MusicVolume");
+        
+        // SFX Volume Row
+        CreateVolumeRow(panelObj.transform, "SFX", "SFXVolume");
+        
+        // Display Section Header
+        CreateSectionHeader(panelObj.transform, "Display");
         
         // Resolution Row
         CreateDropdownRow(panelObj.transform, "Resolution", "ResolutionDropdown");
@@ -109,6 +121,23 @@ public class SettingsPanelGenerator : EditorWindow
         EditorUtility.DisplayDialog("Success", "Settings Panel created! You can now modify it in the Hierarchy.", "OK");
     }
     
+    private void CreateSectionHeader(Transform parent, string text)
+    {
+        GameObject headerObj = new GameObject(text + "Header");
+        headerObj.transform.SetParent(parent, false);
+        
+        TextMeshProUGUI headerText = headerObj.AddComponent<TextMeshProUGUI>();
+        headerText.text = text;
+        headerText.fontSize = 24;
+        headerText.fontStyle = FontStyles.Bold;
+        headerText.color = new Color(textColor.r, textColor.g, textColor.b, 0.7f);
+        headerText.alignment = TextAlignmentOptions.Left;
+        if (customFont != null) headerText.font = customFont;
+        
+        LayoutElement le = headerObj.AddComponent<LayoutElement>();
+        le.preferredHeight = 35;
+    }
+    
     private void CreateHeader(Transform parent, string text)
     {
         GameObject headerObj = new GameObject("Header");
@@ -126,9 +155,9 @@ public class SettingsPanelGenerator : EditorWindow
         le.preferredHeight = 60;
     }
     
-    private void CreateVolumeRow(Transform parent)
+    private void CreateVolumeRow(Transform parent, string label, string sliderName)
     {
-        GameObject row = CreateSettingRow(parent, "Volume");
+        GameObject row = CreateSettingRow(parent, label);
         
         // Slider Container
         GameObject sliderContainer = new GameObject("SliderContainer");
@@ -145,10 +174,10 @@ public class SettingsPanelGenerator : EditorWindow
         containerLE.preferredHeight = 30;
         
         // Create Slider
-        GameObject sliderObj = CreateSlider(sliderContainer.transform, "VolumeSlider");
+        GameObject sliderObj = CreateSlider(sliderContainer.transform, sliderName + "Slider");
         
         // Value Text
-        GameObject valueTextObj = new GameObject("VolumeValueText");
+        GameObject valueTextObj = new GameObject(sliderName + "ValueText");
         valueTextObj.transform.SetParent(sliderContainer.transform, false);
         
         TextMeshProUGUI valueText = valueTextObj.AddComponent<TextMeshProUGUI>();
@@ -509,6 +538,9 @@ public class SettingsPanelGenerator : EditorWindow
         Button button = btnObj.AddComponent<Button>();
         button.targetGraphic = btnBg;
         
+        // Add the SettingsBackButton script for auto-wiring
+        btnObj.AddComponent<SettingsBackButton>();
+        
         // Button Text
         GameObject textObj = new GameObject("Text");
         textObj.transform.SetParent(btnObj.transform, false);
@@ -563,22 +595,59 @@ public class SettingsPanelGenerator : EditorWindow
             so.FindProperty("fullscreenToggle").objectReferenceValue = fullscreenToggle;
         }
         
-        // Find Volume Slider
-        Transform volumeRow = panelObj.transform.Find("VolumeRow");
-        if (volumeRow != null)
+        // Find Master Volume Slider
+        Transform masterRow = panelObj.transform.Find("MasterRow");
+        if (masterRow != null)
         {
-            Slider volumeSlider = volumeRow.GetComponentInChildren<Slider>();
-            so.FindProperty("volumeSlider").objectReferenceValue = volumeSlider;
+            Slider masterSlider = masterRow.GetComponentInChildren<Slider>();
+            so.FindProperty("masterVolumeSlider").objectReferenceValue = masterSlider;
             
-            // Find Volume Text
-            Transform sliderContainer = volumeRow.Find("SliderContainer");
+            Transform sliderContainer = masterRow.Find("SliderContainer");
             if (sliderContainer != null)
             {
-                Transform valueTextTransform = sliderContainer.Find("VolumeValueText");
+                Transform valueTextTransform = sliderContainer.Find("MasterVolumeValueText");
                 if (valueTextTransform != null)
                 {
                     TextMeshProUGUI volumeText = valueTextTransform.GetComponent<TextMeshProUGUI>();
-                    so.FindProperty("volumeValueText").objectReferenceValue = volumeText;
+                    so.FindProperty("masterVolumeText").objectReferenceValue = volumeText;
+                }
+            }
+        }
+        
+        // Find Music Volume Slider
+        Transform musicRow = panelObj.transform.Find("MusicRow");
+        if (musicRow != null)
+        {
+            Slider musicSlider = musicRow.GetComponentInChildren<Slider>();
+            so.FindProperty("musicVolumeSlider").objectReferenceValue = musicSlider;
+            
+            Transform sliderContainer = musicRow.Find("SliderContainer");
+            if (sliderContainer != null)
+            {
+                Transform valueTextTransform = sliderContainer.Find("MusicVolumeValueText");
+                if (valueTextTransform != null)
+                {
+                    TextMeshProUGUI volumeText = valueTextTransform.GetComponent<TextMeshProUGUI>();
+                    so.FindProperty("musicVolumeText").objectReferenceValue = volumeText;
+                }
+            }
+        }
+        
+        // Find SFX Volume Slider
+        Transform sfxRow = panelObj.transform.Find("SFXRow");
+        if (sfxRow != null)
+        {
+            Slider sfxSlider = sfxRow.GetComponentInChildren<Slider>();
+            so.FindProperty("sfxVolumeSlider").objectReferenceValue = sfxSlider;
+            
+            Transform sliderContainer = sfxRow.Find("SliderContainer");
+            if (sliderContainer != null)
+            {
+                Transform valueTextTransform = sliderContainer.Find("SFXVolumeValueText");
+                if (valueTextTransform != null)
+                {
+                    TextMeshProUGUI volumeText = valueTextTransform.GetComponent<TextMeshProUGUI>();
+                    so.FindProperty("sfxVolumeText").objectReferenceValue = volumeText;
                 }
             }
         }
