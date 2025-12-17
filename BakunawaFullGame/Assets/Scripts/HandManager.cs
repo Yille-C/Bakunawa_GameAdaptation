@@ -107,6 +107,10 @@ public class HandManager : MonoBehaviourPunCallbacks
     public Button playCardButton;
     public Text timerText;
 
+    [Header("Planning Phase UI")]
+    public GameObject planningUIPanel;  // Parent containing timer, energy, lock-in button
+
+
     [Header("Settings")]
     public float playCardScale = 1.2f;
     public float lockedScale = 0.6f;
@@ -1485,10 +1489,18 @@ void Update()
     [PunRPC]
     void RPC_StartPlayerBattleTurn(int actorID)
     {
-        Debug.Log($"RPC_StartPlayerBattleTurn called. actorID: {actorID}, LocalPlayer: {PhotonNetwork.LocalPlayer.ActorNumber}, isMyTurn: {PhotonNetwork.LocalPlayer.ActorNumber == actorID}");
+        Debug.Log($"RPC_StartPlayerBattleTurn called. actorID: {actorID}, LocalPlayer: {PhotonNetwork.LocalPlayer.ActorNumber}");
 
+        // Hide dice and turn choice panels
         if (dicePanel) dicePanel.SetActive(false);
         if (turnChoicePanel) turnChoicePanel.SetActive(false);
+
+        // HIDE PLANNING UI FOR EVERYONE
+        if (planningUIPanel != null) planningUIPanel.SetActive(false);
+        if (timerText != null) timerText.gameObject.SetActive(false);
+        if (energySlider != null) energySlider.gameObject.SetActive(false);
+        if (energyText != null) energyText.gameObject.SetActive(false);
+        if (lockInButton != null) lockInButton.gameObject.SetActive(false);
 
         if (PhotonNetwork.LocalPlayer.ActorNumber == actorID)
         {
@@ -1514,6 +1526,7 @@ void Update()
                 {
                     Debug.Log($"Unlocking card: {c.name}");
                     c.SetLockedState(false);
+                    c.enabled = true;  // Make sure CardUI script is enabled
 
                     Button btn = c.GetComponent<Button>();
                     if (btn == null)
@@ -1543,6 +1556,7 @@ void Update()
             Debug.Log($"Not my turn, waiting for player {actorID}");
         }
     }
+
 
 
     [PunRPC]
@@ -1804,6 +1818,7 @@ void Update()
 
 
 
+
     [PunRPC]
     void RPC_EndTurnMP()
     {
@@ -1818,7 +1833,18 @@ void Update()
         if (tribeLockedPanel) foreach (Transform t in tribeLockedPanel) Destroy(t.gameObject);
         if (bakunawaLockedPanel) foreach (Transform t in bakunawaLockedPanel) Destroy(t.gameObject);
         if (dicePanel) dicePanel.SetActive(false);
-        if (lockInButton) lockInButton.interactable = true;
+        if (playCardButton) playCardButton.gameObject.SetActive(false);
+
+        // SHOW PLANNING UI AGAIN
+        if (planningUIPanel != null) planningUIPanel.SetActive(true);
+        if (timerText != null) timerText.gameObject.SetActive(true);
+        if (energySlider != null) energySlider.gameObject.SetActive(true);
+        if (energyText != null) energyText.gameObject.SetActive(true);
+        if (lockInButton != null)
+        {
+            lockInButton.gameObject.SetActive(true);
+            lockInButton.interactable = true;
+        }
 
         currentEnergy = maxEnergy;
         UpdateEnergyUI();

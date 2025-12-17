@@ -980,19 +980,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b04a4b522a1a9794a831828c45bb7803, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScoreManager
-  towerSlider: {fileID: 451476451}
-  currentTowerScore: 0
-  playerScoreText: {fileID: 1645003267}
-  bakunawaScoreText: {fileID: 877867971}
-  popupPrefab: {fileID: 3821404061546364207, guid: 29ef581f89dd637429026a6135cd0778, type: 3}
-  playerPopupSpot: {fileID: 1484996030}
-  bakunawaPopupSpot: {fileID: 40903516}
-  playerZone: {fileID: 1255754359}
-  bakunawaZone: {fileID: 212394942}
   playerTotal: 0
   bakunawaTotal: 0
   enemyDebuffValue: 0
   playerDebuffValue: 0
+  lastEnemyDebuff: 0
+  lastPlayerDebuff: 0
+  playerScoreText: {fileID: 1645003267}
+  bakunawaScoreText: {fileID: 877867971}
+  towerSlider: {fileID: 451476451}
+  currentTowerScore: 0
+  debuffPopupPrefab: {fileID: 0}
+  playerDebuffSpawnPoint: {fileID: 0}
+  bakunawaDebuffSpawnPoint: {fileID: 0}
+  playerZone: {fileID: 1255754359}
+  bakunawaZone: {fileID: 212394942}
 --- !u!4 &199228802
 Transform:
   m_ObjectHideFlags: 0
@@ -3718,12 +3720,12 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 761393683}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1981960946}
+  m_Father: {fileID: 1710369557}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -4281,7 +4283,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 263972603}
-  m_Father: {fileID: 1981960946}
+  m_Father: {fileID: 1710369557}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -5901,14 +5903,14 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1253369407}
-  m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
+  m_LocalRotation: {x: -0, y: -0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1305585857}
   - {fileID: 2116309800}
-  m_Father: {fileID: 1981960946}
+  m_Father: {fileID: 1710369557}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -7766,17 +7768,56 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1703661421}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1981960946}
+  m_Father: {fileID: 1710369557}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 140}
   m_SizeDelta: {x: 264.2, y: 128.79}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1710369556
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1710369557}
+  m_Layer: 5
+  m_Name: PLanningUI
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1710369557
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1710369556}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 888186802}
+  - {fileID: 761393686}
+  - {fileID: 1253369409}
+  - {fileID: 1703661424}
+  m_Father: {fileID: 1981960946}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1751609418
 GameObject:
@@ -8750,6 +8791,7 @@ MonoBehaviour:
   lockInButton: {fileID: 888186799}
   playCardButton: {fileID: 1205955841}
   timerText: {fileID: 1703661422}
+  planningUIPanel: {fileID: 1710369556}
   playCardScale: 0.7
   lockedScale: 0.6
   discardScale: 0.6
@@ -8883,16 +8925,13 @@ RectTransform:
   - {fileID: 1765405018}
   - {fileID: 1759265581}
   - {fileID: 1827748012}
-  - {fileID: 888186802}
+  - {fileID: 1710369557}
   - {fileID: 1234958803}
   - {fileID: 1205955844}
-  - {fileID: 761393686}
-  - {fileID: 1253369409}
   - {fileID: 1764465025}
   - {fileID: 554939571}
   - {fileID: 1081702656}
   - {fileID: 475519766}
-  - {fileID: 1703661424}
   - {fileID: 405109866}
   - {fileID: 1959203197}
   - {fileID: 1560954692}
