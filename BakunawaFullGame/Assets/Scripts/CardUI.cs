@@ -754,6 +754,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             {
                 if (cardBackObject != null && cardBackObject.activeSelf) return;
 
+                // Prevent showing details for enemy's locked cards
+                if (isEnemy && isLocked) return;
+
                 detailsShown = true;
                 if (HandManager.Instance != null && data != null)
                 {
@@ -765,6 +768,7 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
         UpdateAnimation();
         UpdateSorting();
     }
+
 
     void UpdateSorting()
     {

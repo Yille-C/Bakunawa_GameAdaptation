@@ -128,6 +128,14 @@ public class HandManager : MonoBehaviour
     [Header("Data")]
     public List<CardData> myDeck;
 
+    [Header("Card Clash Audio")]
+    [SerializeField] private AudioClip cardClashSFX;
+
+    [Header("Discard Audio")]
+    [SerializeField] private AudioClip discardPileSFX;
+    [SerializeField][Range(0f, 1f)] private float discardVolume = 0.6f;
+
+
     private List<CardUI> selectedCardsUI = new List<CardUI>();
 
     public bool isPlanningPhase = true;
@@ -448,6 +456,12 @@ public class HandManager : MonoBehaviour
         // Visuals
         playerCard.SetBroken(true);
         if (enemyCard != null) enemyCard.SetBroken(true);
+
+        // Play clash sound effect
+        if (cardClashSFX != null && GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlaySFX(cardClashSFX, 0.8f);
+        }
 
         // Screen Shake & IMPACT PUNCH
         Vector3 camOriginalPos = Camera.main.transform.position;
@@ -1757,7 +1771,12 @@ public class HandManager : MonoBehaviour
     // moved logic to end of file to override
 
     void MoveToPile(CardUI card, Transform pile, bool faceDown) 
-    { 
+    {
+        if (pile == discardPileArea && discardPileSFX != null && GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlaySFX(discardPileSFX, discardVolume);
+        }
+
         // Stop any particle effects on this card
         CardDisplay display = card.GetComponent<CardDisplay>();
         if (display != null) display.ResetStats();
@@ -1775,7 +1794,14 @@ public class HandManager : MonoBehaviour
     IEnumerator AnimatedMoveToPile(CardUI card, Transform pile, bool faceDown, float duration = 0.4f)
     {
         if (card == null) yield break;
-        
+
+        // Play discard sound effect if moving to discard pile
+        if (pile == discardPileArea && discardPileSFX != null && GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlaySFX(discardPileSFX, discardVolume);
+        }
+
+
         // Stop any particle effects on this card immediately
         CardDisplay display = card.GetComponent<CardDisplay>();
         if (display != null) display.ResetStats();

@@ -22,7 +22,11 @@ public class TurnNotificationUI : MonoBehaviour
     public float slideInDuration = 0.5f;
     public float pauseDuration = 0.8f;
     public float slideOutDuration = 0.4f;
-    
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip swooshSFX;
+    [SerializeField][Range(0f, 1f)] private float swooshVolume = 0.7f;
+
     [Header("Bloom Settings")]
     public float bloomIntensity = 1.5f;
     public float bloomThreshold = 0.5f;
@@ -289,11 +293,15 @@ public class TurnNotificationUI : MonoBehaviour
         if (textRect != null) textRect.anchoredPosition = new Vector2(-screenWidth * 1.5f, 0);
         if (dimmerImage != null) dimmerImage.color = new Color(0, 0, 0, 0);
 
+        if (swooshSFX != null && GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlaySFX(swooshSFX, swooshVolume);
+        }
 
         // 1. Dim screen and Slide In (Fast in)
         float elapsed = 0f;
         float spawnTimer = 0f;
-        
+
         while (elapsed < slideInDuration)
         {
             float dt = Time.deltaTime;
