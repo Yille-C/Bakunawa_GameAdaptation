@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -1986411305, guid: b878111bd70afd142988bcf18669ed64, type: 3}
   description: Reduce Enemy Atk by 2. +1 Self Atk if enemy has more cards.
   effectID: def_armored
-  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
+  lockedArt: {fileID: -857861494, guid: 3919f146fbab5da45b44f2af1ddd6f4b, type: 3}

@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: 1149648984, guid: 4820e398191dd6945ade0b176e98abb0, type: 3}
   description: Reveal opponent hand
   effectID: sup_predator
-  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
+  lockedArt: {fileID: 1414796618, guid: 53a48d750b536e14a8b62ded19c2ee2c, type: 3}
