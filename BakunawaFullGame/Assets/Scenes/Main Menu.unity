@@ -2111,13 +2111,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d8f0e4fa794a064f8539e7b003a160c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuManager
-  gameSceneName: GameScene
+  singlePlayerSceneName: GameScene
   settingsPanel: {fileID: 296095834}
   howToPlayPanel: {fileID: 1297116612}
+  modeSelectPanel: {fileID: 0}
+  connectPanel: {fileID: 0}
   sfxSource: {fileID: 489985208}
   clickClip: {fileID: 0}
   hoverClip: {fileID: 0}
   volumeSlider: {fileID: 0}
+  lobbyPanel: {fileID: 0}
 --- !u!4 &489985207
 Transform:
   m_ObjectHideFlags: 0
@@ -3233,11 +3236,11 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1621388297}
         m_TargetAssemblyTypeName: MainMenuManager, Assembly-CSharp
-        m_MethodName: OnPlayClicked
-        m_Mode: 0
+        m_MethodName: OnSinglePlayerClicked
+        m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -5389,13 +5392,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d8f0e4fa794a064f8539e7b003a160c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuManager
-  gameSceneName: GameScene
+  singlePlayerSceneName: GameScene
   settingsPanel: {fileID: 0}
   howToPlayPanel: {fileID: 1297116612}
+  modeSelectPanel: {fileID: 0}
+  connectPanel: {fileID: 0}
   sfxSource: {fileID: 0}
   clickClip: {fileID: 0}
   hoverClip: {fileID: 0}
   volumeSlider: {fileID: 0}
+  lobbyPanel: {fileID: 0}
 --- !u!114 &1621388298
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7365,6 +7371,12 @@ MonoBehaviour:
   resolutionDropdown: {fileID: 218496939}
   qualityDropdown: {fileID: 371782451}
   fullscreenToggle: {fileID: 549587925}
+  masterVolumeSlider: {fileID: 0}
+  masterVolumeText: {fileID: 0}
+  musicVolumeSlider: {fileID: 0}
+  musicVolumeText: {fileID: 0}
+  sfxVolumeSlider: {fileID: 0}
+  sfxVolumeText: {fileID: 0}
   volumeSlider: {fileID: 0}
   volumeValueText: {fileID: 0}
 --- !u!114 &2118282189

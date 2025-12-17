@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -784243883, guid: bee892492f4c7fb4b94e96fd4ef19aa9, type: 3}
   description: +2 Atk to all cards played after this one.
   effectID: sup_ancient
-  lockedArt: {fileID: 1446974379, guid: a8ebd62a736977e4eb0f1841ed65d9bb, type: 3}
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

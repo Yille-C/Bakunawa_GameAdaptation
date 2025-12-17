@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -2113121980, guid: d87cab277db288249acbabc6757cb50e, type: 3}
   description: No additional effect.
   effectID: atk_primal
-  lockedArt: {fileID: -1665888317, guid: 600aeb502640c244c9eefd583daa323c, type: 3}
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}

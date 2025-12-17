@@ -20,4 +20,4 @@ MonoBehaviour:
   cardArt: {fileID: -94231798, guid: b2a0130ed9ce7164aab385c119619fda, type: 3}
   description: If you win round, opponent discards 1
   effectID: sup_tidal
-  lockedArt: {fileID: -188823607, guid: 0ec03a1f696ccee48bc6820b4a356275, type: 3}
+  lockedArt: {fileID: -527370311, guid: bf6c9b9a0b397f34ea7c3b512e1d34ab, type: 3}
