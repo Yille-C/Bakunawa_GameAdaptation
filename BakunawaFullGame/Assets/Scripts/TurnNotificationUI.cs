@@ -36,6 +36,9 @@ public class TurnNotificationUI : MonoBehaviour
     private bool isPlaying = false;
     private Coroutine currentNotificationCoroutine;
 
+    private Shader glowShader;
+    private Shader spriteDefaultShader;
+
     private void Awake()
     {
         // Singleton - destroy duplicates
@@ -45,6 +48,11 @@ public class TurnNotificationUI : MonoBehaviour
             return;
         }
         Instance = this;
+        
+        // Shader Preloading
+        glowShader = Shader.Find("UI/HDRGlow");
+        spriteDefaultShader = Shader.Find("Sprites/Default");
+
         EnsureUI();
     }
 
@@ -376,6 +384,7 @@ public class TurnNotificationUI : MonoBehaviour
     }
 
     // --- PARTICLE SYSTEM (Adapted from HandManager) ---
+    // --- PARTICLE SYSTEM (Adapted from HandManager) ---
     void CreateParticleBurst(Vector3 pos, Color baseColor, int count, float spread)
     {
         if (overlayCanvas == null) return;
@@ -385,13 +394,36 @@ public class TurnNotificationUI : MonoBehaviour
         container.transform.SetParent(overlayCanvas.transform, false); // Parent to our canvas
         container.transform.position = pos;
         
-        // To be safe, let's put it behind text but in front of dimmer. 
-        if (dimmerImage != null)
+        // Ensure rendering order: Dimmer < Particles < Text
+        // Setting sibling index to text's index inserts it "before" the text (rendering behind it)
+        if (notificationText != null)
+        {
+            container.transform.SetSiblingIndex(notificationText.transform.GetSiblingIndex());
+        }
+        else if (dimmerImage != null)
+        {
             container.transform.SetSiblingIndex(dimmerImage.transform.GetSiblingIndex() + 1);
+        }
         
+        // Prepare HDR Material if shader exists
+        Material hdrMat = null;
+        if (glowShader != null)
+        {
+            hdrMat = new Material(glowShader);
+            hdrMat.SetFloat("_GlowIntensity", 4f); // Reduced intensity as requested
+            hdrMat.SetFloat("_GlowFalloff", 2f);
+        }
+        else if (spriteDefaultShader != null)
+        {
+             // Fallback to Sprites/Default which supports HDR vertex colors
+             hdrMat = new Material(spriteDefaultShader);
+        }
+
         // 2. Spawn Sprites
         List<RectTransform> sparks = new List<RectTransform>();
         List<Vector2> velocities = new List<Vector2>();
+
+        float hdrMult = 4.0f; // Reduced Boost for Bloom (was 8.0f)
 
         for (int i = 0; i < count; i++)
         {
@@ -405,9 +437,29 @@ public class TurnNotificationUI : MonoBehaviour
             
             // Color Variation
             float rVal = Random.value;
-            if (rVal > 0.7f) img.color = Color.white;
-            else if (rVal > 0.3f) img.color = baseColor;
-            else img.color = Color.Lerp(baseColor, Color.white, 0.5f);
+            Color finalColor;
+
+            if (rVal > 0.7f) finalColor = Color.white;
+            else if (rVal > 0.3f) finalColor = baseColor;
+            else finalColor = Color.Lerp(baseColor, Color.white, 0.5f);
+            
+            // Apply HDR Boost
+            finalColor = new Color(finalColor.r * hdrMult, finalColor.g * hdrMult, finalColor.b * hdrMult, finalColor.a);
+            
+            // Assign Material & Color
+            if (glowShader != null)
+            {
+                Material instanceMat = new Material(hdrMat);
+                instanceMat.SetColor("_Color", finalColor);
+                img.material = instanceMat;
+                img.color = Color.white; 
+            }
+            else
+            {
+                // Fallback (Sprites/Default) uses vertex color directly
+                if (hdrMat != null) img.material = hdrMat;
+                img.color = finalColor;
+            }
             
             // Random direction/Velocity
             Vector2 dir = Random.insideUnitCircle.normalized;

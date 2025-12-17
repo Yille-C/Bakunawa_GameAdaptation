@@ -85,24 +85,22 @@ public class ClashBloomController : MonoBehaviour
                 {
                     if (component.GetType() == bloomType)
                     {
-                        bloomSettings = component;
-                        
-                        // Get the intensity property
-                        intensityProperty = bloomType.GetProperty("intensity");
-                        if (intensityProperty != null)
-                        {
-                            // Get current value as default
-                            var intensityParam = intensityProperty.GetValue(bloomSettings);
-                            var valueProperty = intensityParam.GetType().GetProperty("value");
-                            if (valueProperty != null)
-                            {
-                                normalBloomIntensity = (float)valueProperty.GetValue(intensityParam);
-                                targetBloomIntensity = normalBloomIntensity;
-                                hasBloom = true;
-                                Debug.Log($"[ClashBloomController] URP Bloom found. Normal intensity: {normalBloomIntensity}");
-                            }
-                        }
+                        SetupBloomFromComponent(component, bloomType);
                         break;
+                    }
+                }
+            }
+            
+            // Fallback: Check for any component named "Bloom" if strict type failed
+            if (!hasBloom && postProcessVolume.profile != null)
+            {
+                var components = postProcessVolume.profile.components;
+                foreach (var component in components)
+                {
+                    if (component.GetType().Name == "Bloom")
+                    {
+                         SetupBloomFromComponent(component, component.GetType());
+                         break;
                     }
                 }
             }
@@ -141,6 +139,27 @@ public class ClashBloomController : MonoBehaviour
             // Silently fail - no post processing available
         }
     }
+
+    void SetupBloomFromComponent(object component, System.Type type)
+    {
+        bloomSettings = component;
+        
+        // Get the intensity property
+        intensityProperty = type.GetProperty("intensity");
+        if (intensityProperty != null)
+        {
+            // Get current value as default
+            var intensityParam = intensityProperty.GetValue(bloomSettings);
+            var valueProperty = intensityParam.GetType().GetProperty("value");
+            if (valueProperty != null)
+            {
+                normalBloomIntensity = (float)valueProperty.GetValue(intensityParam);
+                targetBloomIntensity = normalBloomIntensity;
+                hasBloom = true;
+                if (showDebugLogs) Debug.Log($"[ClashBloomController] Bloom found via {(type.Name == "Bloom" ? "Name Match" : "Strict Type")}. Normal intensity: {normalBloomIntensity}");
+            }
+        }
+    }
     
     void Update()
     {
@@ -175,7 +194,7 @@ public class ClashBloomController : MonoBehaviour
     {
         if (!hasBloom)
         {
-            Debug.Log("[ClashBloomController] TriggerClashBloom called but no bloom available.");
+            // Debug.Log("[ClashBloomController] TriggerClashBloom called but no bloom available.");
             return;
         }
         

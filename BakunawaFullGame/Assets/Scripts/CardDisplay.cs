@@ -35,12 +35,29 @@ public class CardDisplay : MonoBehaviour
             currentAttack = cardData.attackValue;
             UpdateStatText();
         }
+        
+        // Stop any active buff/debuff particle effects
+        CardBuffParticleEffect.StopEffectAt(transform);
     }
 
     public void ModifyAttack(int amount)
     {
+        Debug.Log($"[CardDisplay] ModifyAttack called with amount={amount} on {gameObject.name}");
+        
         currentAttack += amount;
         UpdateStatText();
+        
+        // Play buff/debuff particle effect
+        if (amount > 0)
+        {
+            Debug.Log($"[CardDisplay] Playing BUFF effect on {gameObject.name}");
+            CardBuffParticleEffect.PlayBuffEffectAt(transform, true); // Green particles for buff
+        }
+        else if (amount < 0)
+        {
+            Debug.Log($"[CardDisplay] Playing DEBUFF effect on {gameObject.name}");
+            CardBuffParticleEffect.PlayBuffEffectAt(transform, false); // Red particles for debuff
+        }
     }
 
     void UpdateStatText()

@@ -252,6 +252,12 @@ public class RainEffect : MonoBehaviour
     
     System.Collections.IEnumerator DoLightningFlash()
     {
+        // Play thunder sound (with slight delay for realism)
+        if (GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlayThunder();
+        }
+        
         // Quick flash
         lightningFlash.color = new Color(1, 1, 1, 0.3f);
         yield return new WaitForSeconds(0.05f);
