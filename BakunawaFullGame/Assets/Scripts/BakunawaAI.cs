@@ -492,6 +492,10 @@ public class BakunawaAI : MonoBehaviour
         card.transform.localScale = endScale;
         card.transform.localRotation = endRot;
         card.SwitchToDeckMode(faceDown);
+
+        // Play discard SFX only when the card arrives at the discard pile (not deck reshuffles)
+        if (pile == discardPile && GameAudioManager.Instance != null)
+            GameAudioManager.Instance.PlayCardDiscard();
     }
     
     /// <summary>

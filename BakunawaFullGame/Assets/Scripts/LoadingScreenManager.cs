@@ -81,11 +81,10 @@ public class LoadingScreenManager : MonoBehaviour
 
     private void Awake()
     {
-        // Singleton pattern
+        // Singleton pattern (scene-scoped — no DontDestroyOnLoad)
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
         }
         else
         {
@@ -230,6 +229,30 @@ public class LoadingScreenManager : MonoBehaviour
 
     private IEnumerator LoadSceneRoutine(object sceneIdentifier)
     {
+        // Validate scene exists before starting
+        if (sceneIdentifier is string sceneName)
+        {
+            if (SceneUtility.GetBuildIndexByScenePath(sceneName) < 0)
+            {
+                // Try matching by scene file name within build settings
+                bool found = false;
+                for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+                {
+                    string path = SceneUtility.GetScenePathByBuildIndex(i);
+                    string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                    if (string.Equals(name, sceneName, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    Debug.LogError($"[LoadingScreenManager] Scene '{sceneName}' not found in Build Settings. Aborting load.");
+                    yield break;
+                }
+            }
+        }
         // 1. Show Loading Screen
         if (loadingScreenCanvas != null)
         {
@@ -255,7 +278,7 @@ public class LoadingScreenManager : MonoBehaviour
                 canvasGroup.alpha = 0;
                 while (canvasGroup.alpha < 1)
                 {
-                    canvasGroup.alpha += Time.deltaTime / fadeDuration;
+                    canvasGroup.alpha += Time.unscaledDeltaTime / fadeDuration;
                     yield return null;
                 }
                 canvasGroup.alpha = 1;
@@ -264,7 +287,7 @@ public class LoadingScreenManager : MonoBehaviour
             if (loadingParticles != null) loadingParticles.Play();
         }
 
-        float startTime = Time.time;
+        float startTime = Time.unscaledTime;
         AsyncOperation asyncLoad;
 
         if (sceneIdentifier is string)
@@ -285,7 +308,7 @@ public class LoadingScreenManager : MonoBehaviour
             float sceneProgress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
 
             // Calculate progress based on minimum time (0 to 1)
-            float timeProgress = Mathf.Clamp01((Time.time - startTime) / minimumLoadTime);
+            float timeProgress = Mathf.Clamp01((Time.unscaledTime - startTime) / minimumLoadTime);
 
             // The effective target is the SMALLER of the two. 
             // This prevents the bar from shooting to 100% if the scene loads fast but we are waiting for timer.
@@ -336,7 +359,7 @@ public class LoadingScreenManager : MonoBehaviour
             // 3. Visual bar has filled (if smoothing is on)
             bool visualDone = (!useSmoothProgress || currentFill >= 0.99f); 
 
-            if (asyncLoad.progress >= 0.9f && (Time.time - startTime >= minimumLoadTime) && visualDone)
+            if (asyncLoad.progress >= 0.9f && (Time.unscaledTime - startTime >= minimumLoadTime) && visualDone)
             {
                  // Explicitly set to 100% before activating
                 if (progressBar != null) progressBar.fillAmount = 1f;
@@ -355,7 +378,7 @@ public class LoadingScreenManager : MonoBehaviour
         {
             while (canvasGroup.alpha > 0)
             {
-                canvasGroup.alpha -= Time.deltaTime / fadeDuration;
+                canvasGroup.alpha -= Time.unscaledDeltaTime / fadeDuration;
                 yield return null;
             }
             loadingScreenCanvas.SetActive(false);

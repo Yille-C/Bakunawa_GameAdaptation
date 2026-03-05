@@ -34,7 +34,7 @@ public class GameMenuController : MonoBehaviour
     
     [Header("Scene Management")]
     [Tooltip("Name of the Main Menu scene to load on Quit")]
-    public string mainMenuSceneName = "MainMenu";
+    public string mainMenuSceneName = "Main Menu";
 
     private bool isPaused = false;
 
@@ -134,7 +134,8 @@ public class GameMenuController : MonoBehaviour
         // Ensure time is running before switching scenes
         Time.timeScale = 1f;
         Debug.Log("[GameMenuController] Loading Main Menu...");
-        SceneManager.LoadScene(mainMenuSceneName);
+        LoadingScreenManager.SceneToLoadOnStart = mainMenuSceneName;
+        SceneManager.LoadScene("LoadingScreen");
     }
 
     public void OnQuitClicked()

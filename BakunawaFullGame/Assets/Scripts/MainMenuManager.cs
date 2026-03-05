@@ -1,28 +1,22 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using Photon.Pun;
 
 public class MainMenuManager : MonoBehaviour
 {
     [Header("Scene Config")]
-    [Tooltip("Name of the scene to load for Single Player")]
-    [SerializeField] private string singlePlayerSceneName = "GameScene";
-    // Note: Multiplayer scene is loaded by LobbyManager via Photon
+    [Tooltip("Name of the scene to load when Play is clicked")]
+    [SerializeField] private string gameSceneName = "GameScene";
 
     [Header("Panels")]
     [SerializeField] private GameObject settingsPanel;
     [SerializeField] private GameObject howToPlayPanel;
-    [SerializeField] private GameObject modeSelectPanel; // <--- NEW: Drag your Mode Select Panel here
-    [SerializeField] private GameObject connectPanel;    // <--- NEW: Drag your Photon Connect Panel here
 
     [Header("Audio Settings")]
     [SerializeField] private AudioSource sfxSource;
     [SerializeField] private AudioClip clickClip;
     [SerializeField] private AudioClip hoverClip;
     [SerializeField] private Slider volumeSlider;
-
-    [SerializeField] private GameObject lobbyPanel; 
 
     private void Start()
     {
@@ -32,83 +26,48 @@ public class MainMenuManager : MonoBehaviour
             float savedVol = PlayerPrefs.GetFloat("MasterVolume", 1f);
             volumeSlider.value = savedVol;
             AudioListener.volume = savedVol;
+            
+            // Add listener dynamically
             volumeSlider.onValueChanged.AddListener(SetMasterVolume);
         }
         else
         {
+            // Just load the volume if slider missing
             AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1f);
         }
 
-        // Ensure all panels start closed
-        if (settingsPanel != null) settingsPanel.SetActive(false);
-        if (howToPlayPanel != null) howToPlayPanel.SetActive(false);
-        if (modeSelectPanel != null) modeSelectPanel.SetActive(false);
-        if (connectPanel != null) connectPanel.SetActive(false);
+        // Fallback: Find Settings Panel if missing
+        if (settingsPanel == null)
+        {
+            var settingsMenu = Object.FindFirstObjectByType<SettingsMenu>(FindObjectsInactive.Include);
+            if (settingsMenu != null)
+            {
+                settingsPanel = settingsMenu.gameObject;
+                Debug.Log("MainMenuManager found SettingsPanel dynamically.");
+            }
+            else
+            {
+                // Fallback by name
+                settingsPanel = GameObject.Find("SettingsPanel");
+                if (settingsPanel == null) settingsPanel = GameObject.Find("Settings Panel");
+            }
+        }
     }
 
-    // --- MAIN BUTTONS ---
+    // --- Button Events ---
 
     public void OnPlayClicked()
     {
         PlayClickSound();
-        // Instead of loading game, OPEN MODE SELECT
-        if (modeSelectPanel != null)
-        {
-            modeSelectPanel.SetActive(true);
-        }
-        else
-        {
-            Debug.LogError("Mode Select Panel is not assigned in MainMenuManager!");
-        }
+        Debug.Log("Play Clicked");
+        LoadingScreenManager.SceneToLoadOnStart = gameSceneName;
+        SceneManager.LoadScene("LoadingScreen");
     }
-
-    // --- MODE SELECT BUTTONS ---
-
-    public void OnSinglePlayerClicked()
-    {
-        PlayClickSound();
-        Debug.Log("Starting Single Player...");
-
-        if (LoadingScreenManager.Instance != null)
-        {
-            LoadingScreenManager.Instance.LoadScene(singlePlayerSceneName);
-        }
-        else
-        {
-            SceneManager.LoadScene(singlePlayerSceneName);
-        }
-    }
-
-    public void OnMultiplayerClicked()
-    {
-        PlayClickSound();
-        Debug.Log("Opening Multiplayer Connect...");
-
-        // Hide Mode Select
-        if (modeSelectPanel != null) modeSelectPanel.SetActive(false);
-
-        // Show Photon Connect Panel
-        if (connectPanel != null)
-        {
-            connectPanel.SetActive(true);
-        }
-        else
-        {
-            Debug.LogError("Connect Panel (Photon) is not assigned in MainMenuManager!");
-        }
-    }
-
-    public void CloseModeSelect()
-    {
-        PlayClickSound();
-        if (modeSelectPanel != null) modeSelectPanel.SetActive(false);
-    }
-
-    // --- OTHER MENUS ---
 
     public void OnHowToPlayClicked()
     {
         PlayClickSound();
+        Debug.Log("How to play clicked");
         if (howToPlayPanel != null)
             howToPlayPanel.SetActive(true);
     }
@@ -116,21 +75,30 @@ public class MainMenuManager : MonoBehaviour
     public void OnSettingsClicked()
     {
         PlayClickSound();
+        Debug.Log("Settings clicked - Attempting to open panel");
         if (settingsPanel != null)
         {
             settingsPanel.SetActive(true);
-            settingsPanel.transform.SetAsLastSibling();
+            settingsPanel.transform.SetAsLastSibling(); // Ensure it's on top
+            Debug.Log($"Settings Panel opened: {settingsPanel.name}");
+        }
+        else
+        {
+            Debug.LogError("Settings Panel reference is MISSING in MainMenuManager!");
         }
     }
 
     public void OnQuitClicked()
     {
         PlayClickSound();
+        Debug.Log("Quit clicked");
         Application.Quit();
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
     }
+
+    // --- Panel Control ---
 
     public void CloseSettings()
     {
@@ -146,7 +114,7 @@ public class MainMenuManager : MonoBehaviour
             howToPlayPanel.SetActive(false);
     }
 
-    // --- SETTINGS LOGIC ---
+    // --- Settings Logic ---
 
     public void SetMasterVolume(float value)
     {
@@ -154,6 +122,8 @@ public class MainMenuManager : MonoBehaviour
         PlayerPrefs.SetFloat("MasterVolume", value);
         PlayerPrefs.Save();
     }
+
+    // --- Audio Helpers ---
 
     private void PlayClickSound()
     {
@@ -163,50 +133,11 @@ public class MainMenuManager : MonoBehaviour
         }
     }
 
-    public void PlayHoverSound()
+    public void PlayHoverSound() // To be called via EventTrigger if desired
     {
         if (sfxSource != null && hoverClip != null)
         {
             sfxSource.PlayOneShot(hoverClip);
-        }
-    }
-
-    public void OnBackFromConnectClicked()
-    {
-        PlayClickSound();
-        Debug.Log("Back from Connect Panel");
-
-        // Hide the Connect Panel
-        if (connectPanel != null)
-        {
-            connectPanel.SetActive(false);
-        }
-
-        // Re-open the Mode Select Panel
-        if (modeSelectPanel != null)
-        {
-            modeSelectPanel.SetActive(true);
-        }
-    }
-
-    public void OnBackFromLobbyClicked()
-    {
-        PlayClickSound();
-        Debug.Log("Leaving Lobby...");
-
-        // 1. Tell Photon to leave the room
-        PhotonNetwork.LeaveRoom();
-
-        // 2. Update UI
-        if (lobbyPanel != null)
-        {
-            lobbyPanel.SetActive(false);
-        }
-
-        // 3. Go back to the Connect Panel
-        if (connectPanel != null)
-        {
-            connectPanel.SetActive(true);
         }
     }
 }
