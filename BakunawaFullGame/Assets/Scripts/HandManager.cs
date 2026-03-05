@@ -1766,7 +1766,7 @@ public class HandManager : MonoBehaviour
         card.transform.localPosition = Vector3.zero; 
         card.transform.localScale = new Vector3(discardScale, discardScale, discardScale); 
         card.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(-10f, 10f)); 
-        card.SwitchToDeckMode(faceDown); 
+        card.SwitchToDeckMode(faceDown);
     }
     
     /// <summary>
@@ -1821,6 +1821,10 @@ public class HandManager : MonoBehaviour
         card.transform.localScale = endScale;
         card.transform.localRotation = endRot;
         card.SwitchToDeckMode(faceDown);
+
+        // Play discard SFX only when the card arrives at the discard pile (not deck reshuffles)
+        if (pile == discardPileArea && GameAudioManager.Instance != null)
+            GameAudioManager.Instance.PlayCardDiscard();
     }
     
     /// <summary>
@@ -2011,6 +2015,12 @@ public class HandManager : MonoBehaviour
         if (ClashBloomController.Instance != null)
         {
             ClashBloomController.Instance.TriggerClashBloom();
+        }
+
+        // Play card clash SFX
+        if (GameAudioManager.Instance != null)
+        {
+            GameAudioManager.Instance.PlayCardClash();
         }
         
         // 1. Container

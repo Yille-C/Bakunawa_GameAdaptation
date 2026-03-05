@@ -17,6 +17,23 @@ public class GameAudioManager : MonoBehaviour
     [SerializeField] [Range(0f, 1f)] private float rainVolume = 0.4f;
     [SerializeField] private bool playRainOnStart = true;
     
+    [Header("Card Hover Sound Effects")]
+    [SerializeField] private AudioClip[] cardHoverClips;
+    [SerializeField] [Range(0f, 1f)] private float cardHoverVolume = 0.6f;
+    [SerializeField] [Range(0f, 0.2f)] private float cardHoverPitchVariation = 0.08f;
+
+    [Header("Card Discard Sound Effects")]
+    [Tooltip("Add one or more discard clips for variety - one will be randomly selected on each discard")]
+    [SerializeField] private AudioClip[] cardDiscardClips;
+    [SerializeField] [Range(0f, 1f)] private float cardDiscardVolume = 0.85f;
+    [SerializeField] [Range(0f, 0.2f)] private float cardDiscardPitchVariation = 0.08f;
+
+    [Header("Card Clash Sound Effects")]
+    [Tooltip("Add one or more card clash clips for variety - one will be randomly selected on each clash")]
+    [SerializeField] private AudioClip[] cardClashClips;
+    [SerializeField] [Range(0f, 1f)] private float cardClashVolume = 1f;
+    [SerializeField] [Range(0f, 0.3f)] private float cardClashPitchVariation = 0.1f;
+    
     [Header("Thunder Sound Effects")]
     [Tooltip("Add multiple thunder clips for variety - one will be randomly selected each strike")]
     [SerializeField] private AudioClip[] thunderClips;
@@ -207,6 +224,67 @@ public class GameAudioManager : MonoBehaviour
     
     #endregion
     
+    #region Card Hover SFX
+
+    /// <summary>
+    /// Plays a random card hover sound effect. Call this on pointer enter for player hand cards.
+    /// </summary>
+    public void PlayCardHover()
+    {
+        if (cardHoverClips == null || cardHoverClips.Length == 0 || sfxSource == null) return;
+
+        AudioClip selectedClip = cardHoverClips[Random.Range(0, cardHoverClips.Length)];
+        if (selectedClip == null) return;
+
+        float originalPitch = sfxSource.pitch;
+        sfxSource.pitch = 1f + Random.Range(-cardHoverPitchVariation, cardHoverPitchVariation);
+        sfxSource.PlayOneShot(selectedClip, cardHoverVolume);
+        StartCoroutine(ResetPitchAfterFrame(originalPitch));
+    }
+
+    #endregion
+
+    #region Card Discard SFX
+
+    /// <summary>
+    /// Plays a random card discard sound effect. Call this when any card is moved to the discard pile.
+    /// </summary>
+    public void PlayCardDiscard()
+    {
+        if (cardDiscardClips == null || cardDiscardClips.Length == 0 || sfxSource == null) return;
+
+        AudioClip selectedClip = cardDiscardClips[Random.Range(0, cardDiscardClips.Length)];
+        if (selectedClip == null) return;
+
+        float originalPitch = sfxSource.pitch;
+        sfxSource.pitch = 1f + Random.Range(-cardDiscardPitchVariation, cardDiscardPitchVariation);
+        sfxSource.PlayOneShot(selectedClip, cardDiscardVolume);
+        StartCoroutine(ResetPitchAfterFrame(originalPitch));
+    }
+
+    #endregion
+
+    #region Card Clash SFX
+
+    /// <summary>
+    /// Plays a random card clash sound effect with pitch variation for impact feel.
+    /// Call this when two cards collide in the battle zone.
+    /// </summary>
+    public void PlayCardClash()
+    {
+        if (cardClashClips == null || cardClashClips.Length == 0 || sfxSource == null) return;
+
+        AudioClip selectedClip = cardClashClips[Random.Range(0, cardClashClips.Length)];
+        if (selectedClip == null) return;
+
+        float originalPitch = sfxSource.pitch;
+        sfxSource.pitch = 1f + Random.Range(-cardClashPitchVariation, cardClashPitchVariation);
+        sfxSource.PlayOneShot(selectedClip, cardClashVolume);
+        StartCoroutine(ResetPitchAfterFrame(originalPitch));
+    }
+
+    #endregion
+
     #region General SFX
     
     public void PlaySFX(AudioClip clip, float volume = 1f)

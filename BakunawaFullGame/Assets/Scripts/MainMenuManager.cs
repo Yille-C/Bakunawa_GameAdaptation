@@ -60,17 +60,8 @@ public class MainMenuManager : MonoBehaviour
     {
         PlayClickSound();
         Debug.Log("Play Clicked");
-        
-        if (LoadingScreenManager.Instance != null)
-        {
-            LoadingScreenManager.Instance.LoadScene(gameSceneName);
-        }
-        else
-        {
-            // Fallback: Queue the game scene and load the Loading Screen scene
-            LoadingScreenManager.SceneToLoadOnStart = gameSceneName;
-            SceneManager.LoadScene("LoadingScreen");
-        }
+        LoadingScreenManager.SceneToLoadOnStart = gameSceneName;
+        SceneManager.LoadScene("LoadingScreen");
     }
 
     public void OnHowToPlayClicked()

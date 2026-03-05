@@ -386,7 +386,8 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     }
 
     /// <summary>
-    /// Plays the hover card sound effect when hovering over a card in hand
+    /// Plays the hover card sound effect. Uses the card's own AudioSource and hoverCardSound clip
+    /// which is assigned directly in the prefab for reliable per-card playback.
     /// </summary>
     private void PlayHoverSound()
     {
@@ -692,7 +693,12 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
     {
         if (!enabled || isEnemy || isDeckMode || isLocked) return;
         isHovered = true;
-        PlayHoverSound();
+
+        bool inPlanningPhase = HandManager.Instance != null && HandManager.Instance.isPlanningPhase;
+        if (inPlanningPhase)
+        {
+            PlayHoverSound();
+        }
     }
 
     public void OnPointerExit(PointerEventData eventData)
@@ -753,6 +759,9 @@ public class CardUI : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPo
             if (pressTimer >= holdTimeNeeded)
             {
                 if (cardBackObject != null && cardBackObject.activeSelf) return;
+
+                // Only block detail view for locked enemy (Bakunawa) cards — the player's own locked cards can still be inspected
+                if (isLocked && isEnemy) return;
 
                 detailsShown = true;
                 if (HandManager.Instance != null && data != null)
